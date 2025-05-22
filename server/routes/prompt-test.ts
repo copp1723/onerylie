@@ -2,13 +2,13 @@ import { Router } from 'express';
 import OpenAI from 'openai';
 import { z } from 'zod';
 
-import { isAuthenticated } from '../middleware/auth';
+import { sessionAuth } from '../middleware/auth';
 
 // Create a router
 const router = Router();
 
 // Protect all routes under /api/prompt-test
-router.use(isAuthenticated);
+router.use(sessionAuth);
 
 // Initialize the OpenAI client
 const openai = new OpenAI({
