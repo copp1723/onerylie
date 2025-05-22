@@ -9,7 +9,7 @@ export interface PersonaArguments {
   tone?: string;
   priorityFeatures?: string[];
   tradeInUrl?: string;
-  financingUrl?: string;
+  financeApplicationUrl?: string;
   handoverEmail?: string;
   [key: string]: any;
 }
