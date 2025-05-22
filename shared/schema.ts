@@ -178,6 +178,42 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   metadata: true,
 });
 
+// Lead handover dossier schema
+export const handoverDossiers = pgTable("handover_dossiers", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  dealershipId: integer("dealership_id").notNull().references(() => dealerships.id),
+  customerName: text("customer_name").notNull(),
+  customerContact: text("customer_contact"),
+  conversationSummary: text("conversation_summary").notNull(),
+  customerInsights: jsonb("customer_insights").notNull(), // Array of { key, value, confidence }
+  vehicleInterests: jsonb("vehicle_interests").notNull(), // Array of vehicle specifications/interests
+  suggestedApproach: text("suggested_approach"),
+  urgency: text("urgency").notNull(), // "low", "medium", "high"
+  escalationReason: text("escalation_reason").notNull(),
+  fullConversationHistory: jsonb("full_conversation_history").notNull(),
+  isEmailSent: boolean("is_email_sent").default(false),
+  emailSentAt: timestamp("email_sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertHandoverDossierSchema = createInsertSchema(handoverDossiers).pick({
+  conversationId: true,
+  dealershipId: true,
+  customerName: true,
+  customerContact: true,
+  conversationSummary: true,
+  customerInsights: true,
+  vehicleInterests: true,
+  suggestedApproach: true,
+  urgency: true,
+  escalationReason: true,
+  fullConversationHistory: true,
+  isEmailSent: true,
+  emailSentAt: true,
+});
+
 // Persona config schema
 export const personas = pgTable("personas", {
   id: serial("id").primaryKey(),
@@ -415,6 +451,33 @@ export type InsertConversation = z.infer<typeof insertConversationSchema>;
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+export type HandoverDossier = typeof handoverDossiers.$inferSelect;
+export type InsertHandoverDossier = z.infer<typeof insertHandoverDossierSchema>;
+
+// Define customer insight type for the handover dossier
+export type CustomerInsight = {
+  key: string;
+  value: string;
+  confidence: number;
+};
+
+// Define vehicle interest type for the handover dossier
+export type VehicleInterest = {
+  vin?: string;
+  year?: number;
+  make?: string;
+  model?: string;
+  trim?: string;
+  confidence: number;
+};
+
+// Define conversation history message type
+export type ConversationHistoryMessage = {
+  role: 'customer' | 'assistant';
+  content: string;
+  timestamp: Date;
+};
 
 export type Persona = typeof personas.$inferSelect;
 export type InsertPersona = z.infer<typeof insertPersonaSchema>;

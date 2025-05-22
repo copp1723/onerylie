@@ -430,7 +430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 3. Handover endpoint - escalate to human
+  // 3. Handover endpoint - escalate to human with comprehensive dossier
   app.post('/api/handover', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { conversationId, reason, assignToUserId } = handoverSchema.parse(req.body);
@@ -440,6 +440,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!conversation || conversation.dealershipId !== req.dealershipId) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
+      
+      // Import the handover service
+      const { createAndSendHandoverDossier } = await import('./services/handover');
+      
+      // Create a comprehensive handover dossier and send email
+      const { dossier, emailSent } = await createAndSendHandoverDossier({
+        conversationId,
+        dealershipId: req.dealershipId!,
+        customerName: conversation.customerName,
+        customerContact: conversation.customerPhone || conversation.customerEmail,
+        escalationReason: reason || 'Customer requested human assistance'
+      });
 
       // Escalate the conversation
       const updatedConversation = await storage.escalateConversation(
@@ -458,7 +470,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json({
         success: true,
-        conversation: updatedConversation
+        conversation: updatedConversation,
+        dossier: {
+          id: dossier.id,
+          customerName: dossier.customerName,
+          conversationSummary: dossier.conversationSummary,
+          urgency: dossier.urgency,
+          emailSent
+        }
       });
     } catch (error) {
       console.error('Error handling handover:', error);
