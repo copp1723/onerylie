@@ -101,22 +101,25 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async upsertUser(userData: Partial<InsertUser>): Promise<User> {
+  async upsertUser(userData: any): Promise<User> {
     if (!userData.id) {
       throw new Error("User ID is required for upsert operation");
     }
 
-    const [existingUser] = await db.select().from(users).where(eq(users.id, userData.id));
+    // Using string ID for Replit Auth
+    const [existingUser] = await db.select().from(users).where(eq(users.id, userData.id.toString()));
     
     if (existingUser) {
       // Update existing user
       const [updatedUser] = await db
         .update(users)
         .set({
-          ...userData,
-          updatedAt: new Date()
+          email: userData.email,
+          name: userData.name,
+          // Match actual database schema
+          // No updatedAt in our current schema
         })
-        .where(eq(users.id, userData.id))
+        .where(eq(users.id, userData.id.toString()))
         .returning();
       
       return updatedUser;
@@ -125,7 +128,11 @@ export class DatabaseStorage implements IStorage {
       const [newUser] = await db
         .insert(users)
         .values({
-          ...userData as InsertUser,
+          id: userData.id.toString(),
+          username: userData.username,
+          password: userData.password || "replit-auth", // Required by schema
+          name: userData.name,
+          email: userData.email,
           role: userData.role || 'user' // Default role
         })
         .returning();

@@ -12,25 +12,16 @@ export function AuthButtons() {
 
   if (user) {
     // Get the first letter of name for avatar fallback
-    const fallbackInitial = user.firstName ? 
-      user.firstName.charAt(0).toUpperCase() : 
-      user.email ? 
-        user.email.charAt(0).toUpperCase() : 
-        'U';
+    const userName = user.name || "User";
+    const fallbackInitial = userName.charAt(0).toUpperCase();
 
     return (
       <div className="flex items-center gap-2">
         <Avatar className="w-8 h-8">
-          {user.profileImageUrl && (
-            <AvatarImage 
-              src={user.profileImageUrl} 
-              alt="Profile" 
-            />
-          )}
           <AvatarFallback>{fallbackInitial}</AvatarFallback>
         </Avatar>
         <div className="text-sm">
-          <p className="font-medium">{user.firstName || "User"}</p>
+          <p className="font-medium">{userName}</p>
           <p className="text-xs text-muted-foreground">{user.email || ""}</p>
         </div>
         <Button 
