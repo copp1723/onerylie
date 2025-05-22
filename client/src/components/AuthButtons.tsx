@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export function AuthButtons() {
   const { user, isLoading } = useAuth();
@@ -10,18 +11,27 @@ export function AuthButtons() {
   }
 
   if (user) {
+    // Get the first letter of name for avatar fallback
+    const fallbackInitial = user.firstName ? 
+      user.firstName.charAt(0).toUpperCase() : 
+      user.email ? 
+        user.email.charAt(0).toUpperCase() : 
+        'U';
+
     return (
       <div className="flex items-center gap-2">
-        {user.profileImageUrl && (
-          <img 
-            src={user.profileImageUrl} 
-            alt="Profile" 
-            className="w-8 h-8 rounded-full object-cover"
-          />
-        )}
+        <Avatar className="w-8 h-8">
+          {user.profileImageUrl && (
+            <AvatarImage 
+              src={user.profileImageUrl} 
+              alt="Profile" 
+            />
+          )}
+          <AvatarFallback>{fallbackInitial}</AvatarFallback>
+        </Avatar>
         <div className="text-sm">
           <p className="font-medium">{user.firstName || "User"}</p>
-          <p className="text-xs text-muted-foreground">{user.email}</p>
+          <p className="text-xs text-muted-foreground">{user.email || ""}</p>
         </div>
         <Button 
           variant="outline"
