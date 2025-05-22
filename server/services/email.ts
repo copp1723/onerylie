@@ -13,17 +13,18 @@ if (process.env.SENDGRID_API_KEY) {
   mailService.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-// Email parameters interface - ensuring required fields
+// Email parameters interface
 interface EmailParams {
   to: string;
   from: string;
   subject: string;
-  text: string;
-  html: string;
+  text?: string;
+  html?: string;
 }
 
 /**
  * Send an email using SendGrid
+ * Ensures both text and html are present in the final email
  * 
  * @param apiKey SendGrid API key
  * @param params Email parameters (to, from, subject, text/html)
@@ -53,13 +54,17 @@ export async function sendEmail(
       return false;
     }
     
+    // Ensure we have both text and html content for the email
+    const textContent = params.text || 'This email contains HTML content. Please use an HTML-compatible email client to view it properly.';
+    const htmlContent = params.html || '<p>' + (params.text || 'Email content not available') + '</p>';
+    
     // Send the email
     await mailService.send({
       to: params.to,
       from: params.from,
       subject: params.subject,
-      text: params.text || '',
-      html: params.html || ''
+      text: textContent,
+      html: htmlContent
     });
     
     return true;
@@ -109,10 +114,29 @@ export async function sendInventoryUpdateEmail(
       <p>If you have any questions or concerns about this inventory update, please contact your Rylie AI representative.</p>
     `;
     
+    // Generate a plain text version
+    const text = `
+      Inventory Update Processed
+      
+      Your inventory file has been processed.
+      
+      Processing Results:
+      - Total vehicles processed: ${results.totalProcessed || 0}
+      - New vehicles added: ${results.added || 0}
+      - Existing vehicles updated: ${results.updated || 0}
+      ${results.errors && results.errors.length > 0 ? 
+        `- Errors encountered: ${results.errors.length}` : 
+        ''
+      }
+      
+      If you have any questions or concerns about this inventory update, please contact your Rylie AI representative.
+    `;
+    
     return await sendEmail(process.env.SENDGRID_API_KEY || '', {
       to,
       from,
       subject,
+      text,
       html
     });
   } catch (error) {
@@ -143,7 +167,7 @@ export async function sendConversationSummary(
     const startedAt = conversation.createdAt ? new Date(conversation.createdAt).toLocaleString() : 'Unknown';
     const lastUpdated = conversation.updatedAt ? new Date(conversation.updatedAt).toLocaleString() : 'Unknown';
     
-    // Format messages
+    // Format messages for HTML
     const messagesHtml = conversation.messages && Array.isArray(conversation.messages) 
       ? conversation.messages.map((msg: any) => `
           <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
@@ -177,10 +201,37 @@ export async function sendConversationSummary(
       </p>
     `;
     
+    // Generate a plain text version for email clients that don't support HTML
+    let messagesText = 'No messages in this conversation';
+    if (conversation.messages && Array.isArray(conversation.messages)) {
+      messagesText = conversation.messages.map((msg: any) => {
+        const sender = msg.role === 'customer' ? customerName : 'Rylie AI';
+        const timestamp = msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '';
+        return `${sender}: ${msg.content}\n${timestamp ? `Sent: ${timestamp}` : ''}`;
+      }).join('\n\n');
+    }
+    
+    const text = `
+      Conversation Summary
+      
+      Here is a summary of the conversation with ${customerName}.
+      
+      Conversation Details:
+      - Status: ${status}
+      - Started: ${startedAt}
+      - Last Updated: ${lastUpdated}
+      
+      Messages:
+      ${messagesText}
+      
+      To respond to this conversation, please log in to your Rylie AI dashboard.
+    `;
+    
     return await sendEmail(process.env.SENDGRID_API_KEY || '', {
       to,
       from,
       subject,
+      text,
       html
     });
   } catch (error) {
@@ -252,7 +303,7 @@ export async function sendHandoverEmail(
     
     const nextStepsHtml = nextSteps.map((item: string) => `<li>${item}</li>`).join('');
     
-    // Format conversation history
+    // Format conversation history for HTML
     const messagesHtml = dossier.fullConversationHistory && Array.isArray(dossier.fullConversationHistory) 
       ? dossier.fullConversationHistory.map((msg: any) => `
           <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
@@ -330,10 +381,73 @@ export async function sendHandoverEmail(
       </div>
     `;
     
+    // Generate a plain text version for email clients that don't support HTML
+    // Create a simpler text-based format of the same information
+    let messagesText = 'No conversation history available';
+    if (dossier.fullConversationHistory && Array.isArray(dossier.fullConversationHistory)) {
+      messagesText = dossier.fullConversationHistory.map((msg: any) => {
+        const sender = msg.role === 'customer' ? customerName : 'Rylie AI';
+        const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+        return `${sender}: ${msg.content}\n${timestamp ? `Sent: ${timestamp}` : ''}`;
+      }).join('\n\n');
+    }
+    
+    // Format customer insights in text
+    let customerInsightsText = 'No customer insights available';
+    if (dossier.customerInsights && Array.isArray(dossier.customerInsights)) {
+      customerInsightsText = dossier.customerInsights.map((insight: any) => {
+        return `- ${insight.key}: ${insight.value}`;
+      }).join('\n');
+    }
+    
+    // Format vehicle interests in text
+    let vehicleInterestsText = '';
+    if (dossier.vehicleInterests && Array.isArray(dossier.vehicleInterests)) {
+      vehicleInterestsText = dossier.vehicleInterests.map((vehicle: any) => {
+        const details = [];
+        if (vehicle.year) details.push(`${vehicle.year}`);
+        if (vehicle.make) details.push(`${vehicle.make}`);
+        if (vehicle.model) details.push(`${vehicle.model}`);
+        if (vehicle.trim) details.push(`${vehicle.trim}`);
+        
+        return `- ${details.join(' ')} (Confidence: ${vehicle.confidence * 100}%)`;
+      }).join('\n');
+    }
+    
+    const text = `
+LEAD HANDOVER DOSSIER - ${urgency} PRIORITY
+
+CUSTOMER INFORMATION:
+Name: ${customerName}
+Contact: ${customerContact}
+Handover Date: ${handoverDate}
+Reason: ${escalationReason}
+
+SUMMARY:
+${dossier.conversationSummary}
+
+ACTION ITEMS:
+${actionItems.map(item => `- ${item}`).join('\n')}
+
+CUSTOMER INSIGHTS:
+${customerInsightsText}
+
+${vehicleInterestsText ? `VEHICLE INTERESTS:\n${vehicleInterestsText}\n\n` : ''}
+
+NEXT STEPS:
+${nextSteps.map(item => `- ${item}`).join('\n')}
+
+CONVERSATION HISTORY:
+${messagesText}
+
+This handover was automatically generated by Rylie AI. For questions, contact support.
+    `;
+    
     return await sendEmail(process.env.SENDGRID_API_KEY || '', {
       to,
       from,
       subject,
+      text,
       html
     });
   } catch (error) {
