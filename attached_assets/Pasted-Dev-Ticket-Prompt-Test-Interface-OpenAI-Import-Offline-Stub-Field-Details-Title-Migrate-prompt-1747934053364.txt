@@ -1,0 +1,78 @@
+Dev Ticket — Prompt-Test Interface: OpenAI Import & Offline Stub
+
+Field	Details
+Title	Migrate prompt-test.ts to ESM and add local-stub mode for offline prompt testing
+ID	API-PT-002
+Priority	P1 – blocks QA
+Severity	Critical (route 500)
+Environment	Node 20 (Vercel functions) • TypeScript • Vite (React) • ESBuild
+Owner	backend-api squad
+Date Opened	2025-05-22
+Tags	esm, openai-sdk, vite, stub-mode
+
+
+⸻
+
+Background / Current State
+	•	tsconfig.json → module: "ESNext"; moduleResolution: "bundler".
+	•	Vite + ESBuild output strips CommonJS helpers.
+	•	OpenAI v4.102.0 is pure-ESM (no default CommonJS entry).
+	•	prompt-test.ts still uses require() ➜ ReferenceError: require is not defined.
+
+Previous attempt to convert to import OpenAI from 'openai' inside the function body still failed—likely because function-scoped import was transpiled out of place by ESBuild (top-level only) or the file stayed in CJS mode.
+
+⸻
+
+Objectives
+	1.	Make the route ESM-compatible so the OpenAI client loads correctly.
+	2.	Provide an “offline stub” mode that produces deterministic, fast responses without hitting the OpenAI API.
+Enabled when OPENAI_API_KEY is empty or PROMPT_TEST_USE_STUB=true.
+
+⸻
+
+Acceptance Criteria
+
+#	Criteria
+1	POST /api/prompt-test returns a valid reply when OPENAI_API_KEY is set, with no runtime import errors.
+2	Same route returns a synthetic reply (stub) when the key is missing or stub flag is enabled.
+3	Vite dev server and Vercel production build complete with zero CommonJS/require warnings.
+4	Unit test prompt-test.spec.ts passes in CI for both live and stub modes.
+5	README section “Prompt Testing” explains the stub flag and expected output.
+
+
+⸻
+
+Technical Plan
+
+Step	Task	Owner
+1	Change file extension to .mts (or set "type": "module" at the pkg root) to force ESM.	
+2	Top-level importimport OpenAI from 'openai';	
+3	Instantiate once:const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });	
+4	Add stub generator: function stubCompletion(...) { return { role:'assistant', content: \[STUB] …` }; }`	
+5	Inside handler: `const useStub = !process.env.OPENAI_API_KEY	
+6	Adjust build (esbuild or Vite) config if needed:format:'esm', platform:'node'.	
+7	Regression testsMock OpenAI client for live path; assert deterministic content for stub path.	
+8	Docs update: environment flags, expected JSON schema.	
+
+
+⸻
+
+Risk & Mitigation
+	•	Node version mismatch – verify Vercel project runs Node 20+ (supports ESM + fetch).
+	•	Circular imports – moving client to shared services/openai.ts avoids route-level duplication.
+	•	Stub divergence vs. real completions – keep stub simple (echo processed prompt) to ensure template placeholders still validate.
+
+⸻
+
+Estimated Effort
+	•	2–3 hours dev (code + tests)
+	•	½ hour PR review & deploy
+	•	½ hour update docs and inform QA
+
+Total ≤ 1 working day.
+
+⸻
+
+QA Notes
+	•	Verify both paths by toggling PROMPT_TEST_USE_STUB.
+	•	Confirm error handling still returns the generic fallback when genuine network issues occur (simulate by revoking key).
