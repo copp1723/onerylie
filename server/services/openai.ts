@@ -262,8 +262,8 @@ NEXT STEPS:
 - Every response must end with a clear action step framed as a friendly invitation.
 
 URL HANDLING & VALUE-DRIVEN INTEGRATION:
-${personaArguments?.tradeInUrl ? `- If the customer mentions trade-ins, include this trade-in link: ${personaArguments.tradeInUrl}` : ''}
-${personaArguments?.financeApplicationUrl ? `- If financing comes up, include this financing link: ${personaArguments.financeApplicationUrl}` : ''}
+- If the customer mentions trade-ins and you have a trade-in URL, include it in your response.
+- If financing comes up and you have a financing URL, include it in your response.
 
 CONCISENESS & FORMATTING:
 - Keep responses short: max 5 sentences OR 3 short paragraphs.
