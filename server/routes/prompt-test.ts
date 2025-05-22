@@ -15,10 +15,17 @@ const useStub = !process.env.OPENAI_API_KEY || process.env.PROMPT_TEST_USE_STUB 
 
 /**
  * Generate a deterministic stub response based on the message content
+ * with appropriate paragraph formatting
  */
 function generateStubResponse(customerMessage: string, personaArguments: any) {
   let response = '';
   const customerMsg = customerMessage.toLowerCase();
+  
+  // Helper function to ensure proper paragraph spacing in responses
+  const formatResponse = (text: string): string => {
+    // Replace sentence-ending punctuation followed by space with punctuation + double newline
+    return text.replace(/([.!?])\s+/g, '$1\n\n').trim();
+  };
   
   // Check for trade-in related queries
   if (customerMsg.includes('trade-in') || customerMsg.includes('trade in') || customerMsg.includes('value') || 
@@ -66,7 +73,7 @@ Our team at ${personaArguments?.dealershipName || "our dealership"} is committed
   }
   
   return {
-    response,
+    response: formatResponse(response),
     shouldEscalate: false,
     reason: null,
     responseTime: 50 // fake response time
@@ -173,8 +180,15 @@ router.post('/', async (req: Request, res: Response) => {
           max_tokens: 1000,
         });
         
+        // Get the response content
+        let responseContent = completion.choices[0].message.content || "I apologize, but I couldn't generate a response.";
+        
+        // Post-process to ensure proper paragraph spacing
+        // This replaces sentence ending punctuation followed by space with punctuation + double newline
+        responseContent = responseContent.replace(/([.!?])\s+/g, '$1\n\n');
+        
         result = {
-          response: completion.choices[0].message.content || "I apologize, but I couldn't generate a response.",
+          response: responseContent,
           shouldEscalate: false,
           reason: null,
           responseTime: Date.now() - startTime
