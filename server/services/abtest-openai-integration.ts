@@ -1,8 +1,6 @@
 import { 
   selectPromptVariant, 
   recordPromptMetrics, 
-  getPromptMetricsByConversation, 
-  updatePromptMetric,
   rateConversation
 } from './abtest';
 import { generateResponse, type ConversationContext, type PersonaArguments, type HandoverDossier } from './openai';

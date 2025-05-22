@@ -14,7 +14,6 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { 
   selectPromptVariant,
   recordPromptMetrics,
-  getPromptMetricsByConversation,
   createExperiment,
   getExperimentResults,
   createPromptVariant,
@@ -265,10 +264,17 @@ router.post('/experiments', apiKeyAuth, async (req: AuthenticatedRequest, res: R
     
     // Create the experiment
     const experiment = await createExperiment(
-      name,
-      description || '',
       dealershipId,
-      variants.map(v => ({ variantId: v.variantId, trafficAllocation: v.trafficAllocation }))
+      {
+        name,
+        description: description || '',
+        isActive: true,
+        startDate: new Date(),
+        variantAssignments: variants.map(v => ({ 
+          variantId: v.variantId, 
+          trafficAllocation: v.trafficAllocation 
+        }))
+      }
     );
     
     return res.status(201).json(experiment);
@@ -407,14 +413,7 @@ router.post('/variants/rate', apiKeyAuth, async (req: AuthenticatedRequest, res:
     
     const { variantId, conversationId, messageId, rating } = ratePromptSchema.parse(req.body);
     
-    // Find the metrics for this message to ensure it exists
-    const metrics = await abTestService.findMetricsForMessage(variantId, conversationId, messageId);
-    
-    if (!metrics) {
-      return res.status(404).json({ message: 'No metrics found for the specified message' });
-    }
-    
-    // Verify the metrics belong to this dealership by checking the variant
+    // Verify the variant belongs to this dealership
     const variant = await db.query.promptVariants.findFirst({
       where: and(
         eq(promptVariants.id, variantId),
@@ -426,8 +425,8 @@ router.post('/variants/rate', apiKeyAuth, async (req: AuthenticatedRequest, res:
       return res.status(403).json({ message: 'Not authorized to rate this prompt variant' });
     }
     
-    // Update the customer rating
-    const success = await abTestService.updateMetricsRating(metrics.id, rating);
+    // Record the rating for this conversation
+    const success = await rateConversation(conversationId, rating, true);
     
     if (!success) {
       return res.status(500).json({ message: 'Failed to update rating' });
