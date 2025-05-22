@@ -30,7 +30,10 @@ interface PersonaArguments {
   workingHours?: string;
   salesEmail?: string;
   handoverEmail?: string;
+  financeApplicationUrl?: string;
+  tradeInUrl?: string;
   customInstructions?: string;
+  constraints?: string;
 }
 
 export default function PromptTesting() {
@@ -45,8 +48,11 @@ When responding to customers:
 - Be friendly, helpful, and knowledgeable
 - Provide specific information about vehicles when appropriate
 - If you don't know something, be honest about it
-- If the customer asks about pricing or financing, offer to connect them with a sales representative
+- If the customer asks about pricing or financing, offer to connect them with a sales representative or share our finance application: {{financeApplicationUrl}}
+- If the customer is interested in trading in their vehicle, share our trade-in valuation tool: {{tradeInUrl}}
 - If the customer seems ready to make a purchase or wants to schedule a test drive, offer to connect them with a sales representative
+
+{{constraints}}
 
 If you need to escalate to a human representative, do so politely and explain that someone will be in touch shortly.`
   );
@@ -61,7 +67,10 @@ If you need to escalate to a human representative, do so politely and explain th
     workingHours: "Mon-Sat 9am-8pm, Sun 10am-6pm",
     salesEmail: "sales@southsidemotors.com",
     handoverEmail: "leads@southsidemotors.com",
-    customInstructions: "Focus on highlighting our current promotions. We have special financing on all SUVs this month."
+    financeApplicationUrl: "https://southsidemotors.com/finance-application",
+    tradeInUrl: "https://southsidemotors.com/trade-in-value",
+    customInstructions: "Focus on highlighting our current promotions. We have special financing on all SUVs this month.",
+    constraints: "- Do not discuss specific pricing details without confirming with a sales rep\n- Do not ask for personal identifiable information like SSN\n- Do not make commitments about specific vehicle availability\n- Do not disparage competitor brands"
   });
 
   const [conversationHistory, setConversationHistory] = useState<
@@ -263,6 +272,28 @@ If you need to escalate to a human representative, do so politely and explain th
                     </div>
                   </div>
                   
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="financeApplicationUrl">Finance Application URL</Label>
+                      <Input
+                        id="financeApplicationUrl"
+                        value={personaArguments.financeApplicationUrl || ""}
+                        onChange={(e) => setPersonaArguments({...personaArguments, financeApplicationUrl: e.target.value})}
+                        placeholder="https://dealer.com/finance-application"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="tradeInUrl">Trade-In URL</Label>
+                      <Input
+                        id="tradeInUrl"
+                        value={personaArguments.tradeInUrl || ""}
+                        onChange={(e) => setPersonaArguments({...personaArguments, tradeInUrl: e.target.value})}
+                        placeholder="https://dealer.com/trade-in-value"
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="customInstructions">Custom Instructions</Label>
                     <Textarea
@@ -271,6 +302,17 @@ If you need to escalate to a human representative, do so politely and explain th
                       value={personaArguments.customInstructions || ""}
                       onChange={(e) => setPersonaArguments({...personaArguments, customInstructions: e.target.value})}
                       placeholder="Add any custom instructions here..."
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="constraints">Constraints / Do Not Instructions</Label>
+                    <Textarea
+                      id="constraints"
+                      className="min-h-[100px]"
+                      value={personaArguments.constraints || ""}
+                      onChange={(e) => setPersonaArguments({...personaArguments, constraints: e.target.value})}
+                      placeholder="Add specific restrictions like: Do not ask for SSN, do not discuss competitor pricing, etc."
                     />
                   </div>
                 </CardContent>
