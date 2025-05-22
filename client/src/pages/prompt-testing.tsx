@@ -597,6 +597,112 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
                       )}
                     </div>
                   )}
+                  
+                  {/* Display handover dossier results if available */}
+                  {handoverResult && (
+                    <Card className="mt-4 border-amber-500">
+                      <CardHeader className="bg-amber-50 dark:bg-amber-950/30">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
+                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                          </svg>
+                          Lead Handover Dossier
+                        </CardTitle>
+                        <CardDescription>
+                          Comprehensive information about the lead for sales representatives
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-4 space-y-4">
+                        {handoverResult.dossier && (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="col-span-2">
+                                <h3 className="text-lg font-semibold">Conversation Summary</h3>
+                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                                  {handoverResult.dossier.conversationSummary}
+                                </p>
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-semibold">Details</h3>
+                                <div className="mt-1 space-y-1 text-sm">
+                                  <p><span className="font-medium">Urgency:</span> <Badge variant={
+                                    handoverResult.dossier.urgency === 'high' ? 'destructive' : 
+                                    handoverResult.dossier.urgency === 'medium' ? 'default' : 'outline'
+                                  }>{handoverResult.dossier.urgency}</Badge></p>
+                                  <p><span className="font-medium">Customer:</span> {handoverResult.dossier.customerName}</p>
+                                  {handoverResult.dossier.id && <p><span className="font-medium">ID:</span> {handoverResult.dossier.id}</p>}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {handoverResult.dossier.customerInsights && handoverResult.dossier.customerInsights.length > 0 && (
+                              <div>
+                                <h3 className="text-lg font-semibold">Customer Insights</h3>
+                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {handoverResult.dossier.customerInsights.map((insight, i) => (
+                                    <div key={i} className="bg-gray-50 dark:bg-gray-800 p-2 rounded-md">
+                                      <div className="flex justify-between items-start">
+                                        <span className="font-medium">{insight.key}</span>
+                                        <Badge variant="outline" className="text-xs">
+                                          {Math.round(insight.confidence * 100)}%
+                                        </Badge>
+                                      </div>
+                                      <p className="text-sm mt-1">{insight.value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {handoverResult.dossier.vehicleInterests && handoverResult.dossier.vehicleInterests.length > 0 && (
+                              <div>
+                                <h3 className="text-lg font-semibold">Vehicle Interests</h3>
+                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {handoverResult.dossier.vehicleInterests.map((vehicle, i) => (
+                                    <div key={i} className="bg-gray-50 dark:bg-gray-800 p-2 rounded-md">
+                                      <div className="flex justify-between items-start">
+                                        <span className="font-medium">
+                                          {vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim}
+                                        </span>
+                                        <Badge variant="outline" className="text-xs">
+                                          {Math.round(vehicle.confidence * 100)}%
+                                        </Badge>
+                                      </div>
+                                      {vehicle.vin && <p className="text-xs mt-1">VIN: {vehicle.vin}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {handoverResult.dossier.suggestedApproach && (
+                              <div>
+                                <h3 className="text-lg font-semibold">Suggested Approach</h3>
+                                <p className="mt-1 text-sm bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
+                                  {handoverResult.dossier.suggestedApproach}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {handoverResult.analysis && (
+                          <Accordion type="single" collapsible className="mt-4">
+                            <AccordionItem value="analysis-details">
+                              <AccordionTrigger>AI Analysis</AccordionTrigger>
+                              <AccordionContent>
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+                                  <pre className="whitespace-pre-wrap text-xs overflow-auto max-h-[400px]">
+                                    {JSON.stringify(handoverResult.analysis, null, 2)}
+                                  </pre>
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
             </CardContent>
