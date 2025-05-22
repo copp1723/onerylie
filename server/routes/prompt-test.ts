@@ -17,23 +17,51 @@ const useStub = !process.env.OPENAI_API_KEY || process.env.PROMPT_TEST_USE_STUB 
  */
 function generateStubResponse(customerMessage: string, personaArguments: any) {
   let response = '';
+  const customerMsg = customerMessage.toLowerCase();
   
-  if (customerMessage.toLowerCase().includes('trade-in') || customerMessage.toLowerCase().includes('trade in')) {
-    response = "We have a great trade-in program! I'd be happy to help you get an estimate for your current vehicle. You can start the process online through our trade-in valuation tool. Would you like me to send you the link?";
+  // Check for trade-in related queries
+  if (customerMsg.includes('trade-in') || customerMsg.includes('trade in') || customerMsg.includes('value') || 
+      customerMsg.includes('worth') || customerMsg.includes('trade')) {
+    // Extract vehicle info if present
+    const vehicleMatches = customerMessage.match(/(?:my|a|the)\s+([a-zA-Z0-9\s]+?)(?:is|for|to|\?|$)/i);
+    const vehicleName = vehicleMatches ? vehicleMatches[1].trim() : '';
     
-    if (personaArguments?.tradeInUrl) {
-      response += `\n\nHere's our trade-in valuation tool: ${personaArguments.tradeInUrl}`;
+    if (vehicleName) {
+      response = `I can help with that! To find out the trade-in value of your ${vehicleName}, please use our trade-in valuation tool. You can access it here: ${personaArguments?.tradeInUrl || "our website"}.
+      
+This tool will guide you through the process and provide you with an estimate based on current market conditions. If you have any other questions, feel free to ask!`;
+    } else {
+      response = `I'd be happy to help you get an estimate for your current vehicle's trade-in value. Our online tool makes it easy to get a fair market assessment without any obligation.
+
+You can start the process right away here: ${personaArguments?.tradeInUrl || "our website"}
+
+Would you like to know anything specific about our trade-in process?`;
     }
   } 
-  else if (customerMessage.toLowerCase().includes('financ') || customerMessage.toLowerCase().includes('loan')) {
-    response = "Our financing department offers competitive rates and flexible terms to fit your budget. You can start the pre-approval process online to save time at the dealership.";
+  // Check for financing related queries
+  else if (customerMsg.includes('financ') || customerMsg.includes('loan') || 
+           customerMsg.includes('credit') || customerMsg.includes('payment') || 
+           customerMsg.includes('money') || customerMsg.includes('afford')) {
     
-    if (personaArguments?.financeApplicationUrl) {
-      response += `\n\nHere's our finance application: ${personaArguments.financeApplicationUrl}`;
-    }
+    response = `We offer flexible financing options to fit your budget and credit situation. Our finance team works with multiple lenders to find the best rates for you.
+
+You can start the pre-approval process online here: ${personaArguments?.financeApplicationUrl || "our finance page"}
+
+This only takes a few minutes and doesn't impact your credit score. Would you like to know more about our current finance specials?`;
   }
+  // General inventory question
+  else if (customerMsg.includes('inventory') || customerMsg.includes('available') || 
+           customerMsg.includes('have') || customerMsg.includes('looking for')) {
+    
+    response = `We have a great selection of vehicles in our inventory right now! Are you looking for something specific like an SUV, sedan, or truck? I'd be happy to help you find the perfect match for your needs.
+
+You can also browse our full inventory on our website, or I can answer any questions about specific models you're interested in.`;
+  }
+  // Default friendly response
   else {
-    response = "Thank you for reaching out to us! I'm here to help with any questions you might have about our inventory, financing options, or scheduling a test drive. How can I assist you today?";
+    response = `Thanks for reaching out to ${personaArguments?.dealershipName || "us"}! I'm here to help with any questions about our inventory, financing options, or scheduling a test drive.
+
+Our team at ${personaArguments?.dealershipName || "our dealership"} is committed to making your car-buying experience as smooth as possible. How can I assist you today?`;
   }
   
   return {
@@ -124,13 +152,14 @@ router.post('/', async (req: Request, res: Response) => {
     } else if (openai) {
       try {
         // Use real OpenAI
+        // Need to use proper ChatCompletionMessageParam types for OpenAI SDK v4+
         const messages = [
-          { role: "system", content: processedPrompt },
+          { role: "system" as const, content: processedPrompt },
           ...previousMessages.map(msg => ({
-            role: msg.role === "customer" ? "user" : "assistant",
+            role: msg.role === "customer" ? "user" as const : "assistant" as const,
             content: msg.content
           })),
-          { role: "user", content: customerMessage }
+          { role: "user" as const, content: customerMessage }
         ];
         
         const completion = await openai.chat.completions.create({
