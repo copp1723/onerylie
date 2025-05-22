@@ -1,5 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
+import { Session } from "express-session";
+import { User } from "@shared/schema";
+
+// Extend the Session interface to include our user type
+declare module "express-session" {
+  interface Session {
+    userId?: number;
+    user?: User;
+    role?: string;
+  }
+}
 
 // Define type for authenticated request
 export interface AuthenticatedRequest extends Request {

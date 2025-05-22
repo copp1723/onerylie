@@ -11,7 +11,7 @@ const router = Router();
 // Get all personas for a dealership
 router.get('/', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const dealershipId = req.session?.dealershipId;
+    const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
       return res.status(403).json({ message: 'Not authorized to access personas' });
     }
@@ -43,7 +43,7 @@ router.get('/api', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) 
 // Get a specific persona
 router.get('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const dealershipId = req.session?.dealershipId;
+    const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
       return res.status(403).json({ message: 'Not authorized to access personas' });
     }
@@ -73,7 +73,7 @@ router.get('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response)
 // Create a new persona
 router.post('/', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const dealershipId = req.session?.dealershipId;
+    const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
       return res.status(403).json({ message: 'Not authorized to create personas' });
     }
@@ -116,7 +116,7 @@ router.post('/', sessionAuth, async (req: AuthenticatedRequest, res: Response) =
 // Update a persona
 router.patch('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const dealershipId = req.session?.dealershipId;
+    const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
       return res.status(403).json({ message: 'Not authorized to update personas' });
     }
@@ -182,7 +182,7 @@ router.patch('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Respons
 // Delete a persona
 router.delete('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const dealershipId = req.session?.dealershipId;
+    const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
       return res.status(403).json({ message: 'Not authorized to delete personas' });
     }
