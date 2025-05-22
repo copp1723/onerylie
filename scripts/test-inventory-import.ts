@@ -3,149 +3,246 @@
  * This script simulates receiving a TSV file and processing it
  */
 
-import fetch from 'node-fetch';
-import { storage } from '../server/storage';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as readline from 'readline';
+import * as csv from 'csv-parser';
+import { db } from '../server/db';
+import { vehicles, dealerships } from '../shared/schema';
+import { eq } from 'drizzle-orm';
 
-// Simple function to prompt for input
+// Create readline interface for interactive mode
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+// Function to prompt user for input
 function prompt(question: string): Promise<string> {
-  const readline = require('readline').createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
   return new Promise((resolve) => {
-    readline.question(question, (answer: string) => {
-      readline.close();
+    rl.question(question, (answer) => {
       resolve(answer);
     });
   });
 }
 
-// Helper for API requests
+// Function to make API requests to the server
 async function apiRequest(endpoint: string, method = 'GET', body?: any) {
   try {
-    // Get the API key first
-    const dealerships = await storage.getDealerships();
-    if (!dealerships || dealerships.length === 0) {
-      throw new Error('No dealerships found in the database');
-    }
-
-    const dealershipId = dealerships[0].id;
-    
-    // Get or create an API key for testing
-    let apiKeys = await storage.getApiKeysByDealership(dealershipId);
-    let apiKey;
-    
-    if (!apiKeys || apiKeys.length === 0) {
-      console.log('No API key found, creating one...');
-      const apiKeyData = await storage.generateApiKey(dealershipId, 'Test API Key');
-      apiKey = apiKeyData.key;
-    } else {
-      apiKey = apiKeys[0].key;
-    }
-
-    // Make the API request
-    const url = `http://localhost:5000${endpoint}`;
-    const response = await fetch(url, {
+    const url = `http://localhost:5000/api${endpoint}`;
+    const options: RequestInit = {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': apiKey
-      },
-      body: body ? JSON.stringify(body) : undefined
-    });
-
-    return await response.json();
+      }
+    };
+    
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+    
+    const response = await fetch(url, options);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`API request failed: ${data.message || response.statusText}`);
+    }
+    
+    return data;
   } catch (error) {
     console.error('API request error:', error);
-    return { error: error.message };
+    throw error;
   }
 }
 
-// Create a sample TSV file for testing
+// Function to create a sample TSV file for testing
 function createSampleTsvFile(): string {
-  const filePath = path.join(__dirname, 'sample_inventory.tsv');
+  const tempDir = path.join(process.cwd(), 'test-data');
+  const filePath = path.join(tempDir, `inventory-sample-${Date.now()}.tsv`);
   
-  // Create header row and some sample vehicles
-  const content = [
-    'VIN\tStockNumber\tMake\tModel\tYear\tTrim\tExteriorColor\tInteriorColor\tMileage\tPrice\tMSRP\tBodyStyle\tTransmission\tEngine\tFuelType\tDrivetrain\tFeatures\tImages',
-    '1HGCM82633A123456\tS12345\tHonda\tAccord\t2023\tTouring\tCrystal Black\tBlack Leather\t15\t32000\t34500\tSedan\tAutomatic\t2.0L Turbo\tGasoline\tFWD\tNavigation,Sunroof,Heated Seats\thttps://example.com/car1.jpg,https://example.com/car1b.jpg',
-    '5TFCZ5AN0MX123456\tT54321\tToyota\tTacoma\t2022\tTRD Off-Road\tArmy Green\tBlack Cloth\t1200\t39500\t41000\tTruck\tAutomatic\t3.5L V6\tGasoline\t4WD\tTow Package,Off-Road Package,Backup Camera\thttps://example.com/truck1.jpg',
-    '1FADP3K21JL123456\tF98765\tFord\tFocus\t2021\tSE\tRuby Red\tGray Cloth\t5500\t19500\t22000\tHatchback\tAutomatic\t1.5L EcoBoost\tGasoline\tFWD\tBluetooth,Backup Camera,Alloy Wheels\t',
-    '5YJ3E1EA8MF123456\tT12345\tTesla\tModel 3\t2023\tLong Range\tPearl White\tWhite Vegan Leather\t45\t51000\t51000\tSedan\tAutomatic\tDual Motor\tElectric\tAWD\tAutopilot,Premium Audio,Glass Roof\thttps://example.com/tesla1.jpg,https://example.com/tesla2.jpg'
-  ].join('\n');
+  // Create a very simple inventory TSV with a few vehicles
+  const fileContent = `Condition\tYear\tMake\tModel\tVIN\tAdvertiser Name\tColor\tDescription\tDoors\tDrivetrain\tFormatted Price\tFuel Type\tImage Type\tImage URL\tMileage\tPrice\tTitle\tTransmission\tTrim\tType\tURL\tVehicle Type\tstock_number
+New\t2024\tHyundai\tSanta Fe\t5NMP5DGL3RH067292\tTest Dealership\tWhite\tNew 2024 Hyundai Santa Fe\t4\tAWD\t$49,198\tGasoline\tStock\thttps://example.com/image1.jpg\t12\t$49,198.00\tNew 2024 Hyundai Santa Fe Calligraphy AWD\tAutomatic\tCalligraphy AWD\tSUV\thttps://example.com/vehicle1\tCar_Truck\t27181
+New\t2024\tHyundai\tTucson\t5NMJECDE3RH437937\tTest Dealership\tBurgundy\tNew 2024 Hyundai Tucson\t4\tAWD\t$39,202\tGasoline\tStock\thttps://example.com/image2.jpg\t9\t$39,202.00\tNew 2024 Hyundai Tucson Limited AWD\tAutomatic\tLimited AWD\tSUV\thttps://example.com/vehicle2\tCar_Truck\t26989
+Pre-Owned\t2022\tHyundai\tSanta Fe\tABC123456789XYZ\tTest Dealership\tBlue\tPre-Owned 2022 Hyundai Santa Fe\t4\tFWD\t$32,995\tGasoline\tStock\thttps://example.com/image3.jpg\t24500\t$32,995.00\tPre-Owned 2022 Hyundai Santa Fe SE\tAutomatic\tSE\tSUV\thttps://example.com/vehicle3\tCar_Truck\t25001
+Pre-Owned\t2021\tToyota\tRAV4\tXYZ987654321ABC\tTest Dealership\tSilver\tPre-Owned 2021 Toyota RAV4\t4\tAWD\t$28,750\tGasoline\tStock\thttps://example.com/image4.jpg\t32750\t$28,750.00\tPre-Owned 2021 Toyota RAV4 XLE AWD\tAutomatic\tXLE AWD\tSUV\thttps://example.com/vehicle4\tCar_Truck\t24890`;
   
-  fs.writeFileSync(filePath, content);
+  fs.writeFileSync(filePath, fileContent);
+  console.log(`Created sample TSV file at: ${filePath}`);
+  
   return filePath;
 }
 
-// Test the inventory import API
+// Function to test inventory import
 async function testInventoryImport() {
-  console.log('Creating sample TSV file...');
-  const filePath = createSampleTsvFile();
+  console.log('\n=== Rylie AI Inventory Import Test ===\n');
   
-  try {
-    // Get the first dealership for testing
-    const dealerships = await storage.getDealerships();
-    if (!dealerships || dealerships.length === 0) {
-      throw new Error('No dealerships found in the database');
-    }
+  // First check if we have dealerships in the database
+  const existingDealerships = await db.select().from(dealerships);
+  
+  if (!existingDealerships.length) {
+    console.log('No dealerships found in the database. Creating a test dealership...');
     
-    const dealershipId = dealerships[0].id;
-    
-    console.log(`Using dealership ID: ${dealershipId}`);
-    
-    // Read the TSV file
-    const tsvContent = fs.readFileSync(filePath, 'utf8');
-    
-    // Send the file to the API
-    console.log('Sending inventory data to API...');
-    const response = await apiRequest('/api/inventory/import/tsv', 'POST', {
-      dealershipId,
-      attachmentContent: tsvContent
+    // Create a test dealership
+    await db.insert(dealerships).values({
+      name: 'Test Dealership',
+      address: '123 Test Street',
+      city: 'Testville',
+      state: 'TS',
+      zip: '12345',
+      phone: '(555) 123-4567',
+      website: 'https://example.com',
+      email: 'test@example.com'
     });
     
-    console.log('API Response:', JSON.stringify(response, null, 2));
-    
-    // Get inventory stats
-    console.log('Getting inventory stats...');
-    const statsResponse = await apiRequest('/api/inventory/import/stats', 'GET');
-    
-    console.log('Inventory Stats:', JSON.stringify(statsResponse, null, 2));
-    
-    // Get the vehicles to verify import
-    console.log('Verifying imported vehicles...');
-    const vehicles = await storage.getVehiclesByDealership(dealershipId);
-    
-    console.log(`Found ${vehicles.length} vehicles in the database`);
-    vehicles.forEach((vehicle, index) => {
-      console.log(`Vehicle ${index + 1}: ${vehicle.year} ${vehicle.make} ${vehicle.model} (VIN: ${vehicle.vin})`);
-    });
-    
-  } catch (error) {
-    console.error('Test failed:', error);
-  } finally {
-    // Clean up the sample file
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      console.log('Sample TSV file deleted');
-    }
+    console.log('Test dealership created.');
   }
+  
+  // Get all dealerships to select one for the test
+  const dealershipList = await db.select().from(dealerships);
+  
+  console.log('\nAvailable dealerships:');
+  dealershipList.forEach((dealership, index) => {
+    console.log(`${index + 1}. ${dealership.name} (ID: ${dealership.id})`);
+  });
+  
+  const dealershipIndex = parseInt(await prompt('\nSelect dealership to import inventory for (number): ')) - 1;
+  const selectedDealership = dealershipList[dealershipIndex] || dealershipList[0];
+  
+  console.log(`\nSelected dealership: ${selectedDealership.name} (ID: ${selectedDealership.id})`);
+  
+  // Ask if the user wants to use an existing file or create a sample
+  const useExistingFile = (await prompt('\nUse existing inventory TSV file? (y/n): ')).toLowerCase() === 'y';
+  
+  let tsvFilePath;
+  
+  if (useExistingFile) {
+    tsvFilePath = await prompt('\nEnter the path to the TSV file: ');
+  } else {
+    tsvFilePath = createSampleTsvFile();
+  }
+  
+  // Confirm the import
+  const confirmImport = (await prompt(`\nImport inventory from ${tsvFilePath} for ${selectedDealership.name}? (y/n): `)).toLowerCase() === 'y';
+  
+  if (!confirmImport) {
+    console.log('Import cancelled.');
+    rl.close();
+    return;
+  }
+  
+  console.log('\nImporting inventory...');
+  
+  // Count current vehicles
+  const currentVehicles = await db.select().from(vehicles).where(eq(vehicles.dealershipId, selectedDealership.id));
+  console.log(`Current vehicle count for dealership: ${currentVehicles.length}`);
+  
+  // Import the inventory
+  // Read the TSV file
+  const rows: any[] = [];
+  
+  fs.createReadStream(tsvFilePath)
+    .pipe(csv({ separator: '\t' }))
+    .on('data', (row) => {
+      rows.push(row);
+    })
+    .on('end', async () => {
+      console.log(`Read ${rows.length} vehicles from TSV file.`);
+      
+      // Prepare the vehicles for import
+      const vehiclesToImport = rows.map(row => ({
+        dealershipId: selectedDealership.id,
+        vin: row.VIN,
+        make: row.Make,
+        model: row.Model,
+        year: parseInt(row.Year),
+        trim: row.Trim,
+        color: row.Color,
+        mileage: parseFloat(row.Mileage),
+        price: parseFloat(row.Price?.replace(/[^0-9.]/g, '') || '0'),
+        condition: row.Condition,
+        drivetrain: row.Drivetrain,
+        transmission: row.Transmission,
+        fuelType: row['Fuel Type'],
+        doors: parseInt(row.Doors) || 4,
+        type: row.Type,
+        stockNumber: row.stock_number,
+        description: row.Description,
+        imageUrl: row['Image URL'],
+        vehicleUrl: row.URL
+      }));
+      
+      // Process in batches to avoid overwhelming the database
+      const batchSize = 10;
+      const batches = [];
+      
+      for (let i = 0; i < vehiclesToImport.length; i += batchSize) {
+        batches.push(vehiclesToImport.slice(i, i + batchSize));
+      }
+      
+      console.log(`Processing ${batches.length} batches of vehicles...`);
+      
+      let importedCount = 0;
+      
+      for (const [index, batch] of batches.entries()) {
+        console.log(`Importing batch ${index + 1}/${batches.length}...`);
+        
+        for (const vehicle of batch) {
+          try {
+            // Check if the vehicle already exists
+            const existingVehicle = await db
+              .select()
+              .from(vehicles)
+              .where(eq(vehicles.vin, vehicle.vin));
+            
+            if (existingVehicle.length > 0) {
+              // Update the vehicle
+              await db
+                .update(vehicles)
+                .set(vehicle)
+                .where(eq(vehicles.vin, vehicle.vin));
+              
+              console.log(`Updated vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.vin})`);
+            } else {
+              // Insert the vehicle
+              await db
+                .insert(vehicles)
+                .values(vehicle);
+              
+              console.log(`Imported vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.vin})`);
+            }
+            
+            importedCount++;
+          } catch (error) {
+            console.error(`Error importing vehicle ${vehicle.vin}:`, error);
+          }
+        }
+      }
+      
+      console.log(`\nImport completed. Imported/updated ${importedCount} vehicles.`);
+      
+      // Count updated vehicles
+      const updatedVehicles = await db.select().from(vehicles).where(eq(vehicles.dealershipId, selectedDealership.id));
+      console.log(`New vehicle count for dealership: ${updatedVehicles.length}`);
+      
+      rl.close();
+    });
 }
 
-// Run interactive or automated test
+// Main function
 async function main() {
-  console.log('Inventory Import Test Tool');
-  console.log('=========================');
-  
   try {
     await testInventoryImport();
   } catch (error) {
-    console.error('Error running test:', error);
+    console.error('Error during inventory import test:', error);
+  } finally {
+    rl.close();
   }
 }
 
-// Run the test
-main().catch(console.error);
+// Run the test if this script is executed directly
+if (require.main === module) {
+  main();
+}
+
+export { testInventoryImport };

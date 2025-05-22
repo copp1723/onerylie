@@ -11,7 +11,18 @@ import {
   insertExperimentVariantSchema
 } from '@shared/schema';
 import { eq, and, inArray } from 'drizzle-orm';
-import { abTestService } from '../services/abtest';
+import { 
+  selectPromptVariant,
+  recordPromptMetrics,
+  getPromptMetricsByConversation,
+  createExperiment,
+  getExperimentResults,
+  createPromptVariant,
+  getPromptVariants,
+  getActiveExperiments,
+  endExperiment,
+  rateConversation
+} from '../services/abtest';
 
 const router = Router();
 
@@ -253,11 +264,11 @@ router.post('/experiments', apiKeyAuth, async (req: AuthenticatedRequest, res: R
     }
     
     // Create the experiment
-    const experiment = await abTestService.createExperiment(
+    const experiment = await createExperiment(
       name,
       description || '',
       dealershipId,
-      variants
+      variants.map(v => ({ variantId: v.variantId, trafficAllocation: v.trafficAllocation }))
     );
     
     return res.status(201).json(experiment);
@@ -323,7 +334,7 @@ router.get('/experiments/:id/results', apiKeyAuth, async (req: AuthenticatedRequ
     }
     
     // Get the experiment results
-    const results = await abTestService.getExperimentResults(experimentId);
+    const results = await getExperimentResults(experimentId);
     
     return res.json(results);
   } catch (error) {

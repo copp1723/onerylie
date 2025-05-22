@@ -1,4 +1,10 @@
-import { abTestService } from './abtest';
+import { 
+  selectPromptVariant, 
+  recordPromptMetrics, 
+  getPromptMetricsByConversation, 
+  updatePromptMetric,
+  rateConversation
+} from './abtest';
 import { generateResponse, type ConversationContext, type PersonaArguments, type HandoverDossier } from './openai';
 import { type Message, type Conversation } from '@shared/schema';
 import { performance } from 'perf_hooks';
@@ -28,7 +34,10 @@ export async function generateABTestedResponse(
     const startTime = performance.now();
     
     // Select a prompt variant to use based on active experiments
-    const promptVariant = await abTestService.selectVariant(dealershipId);
+    const promptVariant = await selectPromptVariant({
+      dealershipId,
+      conversationId: conversation.id
+    });
     
     // If no variant is found, use the base persona template
     const personaTemplate = promptVariant?.promptTemplate || basePersonaTemplate;
@@ -53,13 +62,17 @@ export async function generateABTestedResponse(
       );
       
       // Track the metrics for this prompt variant
-      await abTestService.trackPromptUsage(
-        promptVariant,
-        conversation,
-        message,
-        responseTime,
-        tokensUsed,
-        responseResult.shouldEscalate
+      await recordPromptMetrics(
+        promptVariant.id,
+        conversation.id,
+        message.id,
+        {
+          responseTime,
+          tokensUsed,
+          customerMessageLength: customerMessage.length,
+          assistantResponseLength: responseResult.response.length,
+          wasEscalated: responseResult.shouldEscalate
+        }
       );
     }
     
@@ -93,18 +106,12 @@ export async function generateABTestedResponse(
  * This can be called after a conversation is completed to mark whether the variant was successful
  */
 export async function updatePromptSuccessStatus(
-  variantId: number,
   conversationId: number,
-  messageId: number,
   wasSuccessful: boolean
 ): Promise<boolean> {
   try {
-    // Find the metrics for this message
-    const metrics = await abTestService.findMetricsForMessage(variantId, conversationId, messageId);
-    if (!metrics) return false;
-    
-    // Update the success status
-    return await abTestService.updateMetricsSuccess(metrics.id, wasSuccessful);
+    // Rate the conversation with success/failure status
+    return await rateConversation(conversationId, 0, wasSuccessful);
   } catch (error) {
     console.error('Error updating prompt success status:', error);
     return false;
@@ -115,18 +122,16 @@ export async function updatePromptSuccessStatus(
  * Record a customer rating for a prompt variant
  */
 export async function recordCustomerRating(
-  variantId: number,
   conversationId: number,
-  messageId: number,
   rating: number
 ): Promise<boolean> {
   try {
-    // Find the metrics for this message
-    const metrics = await abTestService.findMetricsForMessage(variantId, conversationId, messageId);
-    if (!metrics) return false;
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5');
+    }
     
-    // Update the customer rating
-    return await abTestService.updateMetricsRating(metrics.id, rating);
+    // Rate the conversation with a customer satisfaction score
+    return await rateConversation(conversationId, rating, true);
   } catch (error) {
     console.error('Error recording customer rating:', error);
     return false;

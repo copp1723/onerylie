@@ -5,10 +5,14 @@ import {
   conversations, type Conversation, type InsertConversation,
   messages, type Message, type InsertMessage,
   personas, type Persona, type InsertPersona,
-  apiKeys, type ApiKey, type InsertApiKey
+  apiKeys, type ApiKey, type InsertApiKey,
+  promptVariants, type PromptVariant, type InsertPromptVariant,
+  promptExperiments, type PromptExperiment, type InsertPromptExperiment,
+  experimentVariants, type ExperimentVariant, type InsertExperimentVariant,
+  promptMetrics, type PromptMetrics, type InsertPromptMetrics
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, like, desc, asc, isNull, sql } from "drizzle-orm";
+import { eq, and, like, desc, asc, isNull, sql, or } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
 // Interface for all storage operations
@@ -57,6 +61,32 @@ export interface IStorage {
   generateApiKey(dealershipId: number, description?: string): Promise<ApiKey>;
   getApiKeysByDealership(dealershipId: number): Promise<ApiKey[]>;
   updateApiKeyStatus(id: number, isActive: boolean): Promise<ApiKey | undefined>;
+  
+  // A/B Testing - Prompt Variant operations
+  getPromptVariant(id: number): Promise<PromptVariant | undefined>;
+  getPromptVariantsByDealership(dealershipId: number, includeInactive?: boolean): Promise<PromptVariant[]>;
+  createPromptVariant(variant: InsertPromptVariant): Promise<PromptVariant>;
+  updatePromptVariant(id: number, variant: Partial<InsertPromptVariant>): Promise<PromptVariant | undefined>;
+  setControlVariant(id: number, dealershipId: number): Promise<PromptVariant | undefined>;
+  
+  // A/B Testing - Experiment operations
+  getPromptExperiment(id: number): Promise<PromptExperiment | undefined>;
+  getPromptExperimentWithVariants(id: number): Promise<any | undefined>; // Returns experiment with variants
+  getPromptExperiments(dealershipId: number): Promise<PromptExperiment[]>;
+  getActivePromptExperiments(dealershipId: number): Promise<PromptExperiment[]>;
+  createPromptExperiment(experiment: InsertPromptExperiment): Promise<PromptExperiment>;
+  updatePromptExperiment(id: number, experiment: Partial<InsertPromptExperiment>): Promise<PromptExperiment | undefined>;
+  
+  // A/B Testing - Experiment Variant operations
+  addVariantToExperiment(experimentId: number, variantId: number, trafficAllocation: number): Promise<ExperimentVariant>;
+  removeVariantFromExperiment(experimentId: number, variantId: number): Promise<boolean>;
+  updateVariantTrafficAllocation(experimentId: number, variantId: number, trafficAllocation: number): Promise<ExperimentVariant | undefined>;
+  
+  // A/B Testing - Metrics operations
+  getPromptMetrics(variantId: number): Promise<PromptMetrics[]>;
+  getPromptMetricsByConversation(conversationId: number): Promise<PromptMetrics | undefined>;
+  createPromptMetric(metric: InsertPromptMetrics): Promise<PromptMetrics>;
+  updatePromptMetric(id: number, metric: Partial<InsertPromptMetrics>): Promise<PromptMetrics | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -378,6 +408,233 @@ export class DatabaseStorage implements IStorage {
       .where(eq(apiKeys.id, id))
       .returning();
     return updatedApiKey;
+  }
+
+  // A/B Testing - Prompt Variant operations
+  async getPromptVariant(id: number): Promise<PromptVariant | undefined> {
+    const [variant] = await db.select().from(promptVariants).where(eq(promptVariants.id, id));
+    return variant;
+  }
+
+  async getPromptVariantsByDealership(dealershipId: number, includeInactive: boolean = false): Promise<PromptVariant[]> {
+    let query = db.select().from(promptVariants).where(eq(promptVariants.dealershipId, dealershipId));
+    
+    if (!includeInactive) {
+      query = query.where(eq(promptVariants.isActive, true));
+    }
+    
+    return await query.orderBy(desc(promptVariants.isControl), desc(promptVariants.createdAt));
+  }
+
+  async createPromptVariant(variant: InsertPromptVariant): Promise<PromptVariant> {
+    // If this variant is set as control, make sure no other variant for this dealership is set as control
+    if (variant.isControl) {
+      await db.update(promptVariants)
+        .set({ isControl: false })
+        .where(
+          and(
+            eq(promptVariants.dealershipId, variant.dealershipId),
+            eq(promptVariants.isControl, true)
+          )
+        );
+    }
+    
+    const [newVariant] = await db.insert(promptVariants).values(variant).returning();
+    return newVariant;
+  }
+
+  async updatePromptVariant(id: number, variant: Partial<InsertPromptVariant>): Promise<PromptVariant | undefined> {
+    // If this variant is being set as control, make sure no other variant for this dealership is set as control
+    if (variant.isControl) {
+      const [existingVariant] = await db.select().from(promptVariants).where(eq(promptVariants.id, id));
+      
+      if (existingVariant) {
+        await db.update(promptVariants)
+          .set({ isControl: false })
+          .where(
+            and(
+              eq(promptVariants.dealershipId, existingVariant.dealershipId),
+              eq(promptVariants.isControl, true),
+              sql`${promptVariants.id} != ${id}`
+            )
+          );
+      }
+    }
+    
+    const [updatedVariant] = await db.update(promptVariants)
+      .set({
+        ...variant,
+        updatedAt: new Date()
+      })
+      .where(eq(promptVariants.id, id))
+      .returning();
+    return updatedVariant;
+  }
+
+  async setControlVariant(id: number, dealershipId: number): Promise<PromptVariant | undefined> {
+    // Clear any existing control variants
+    await db.update(promptVariants)
+      .set({ isControl: false })
+      .where(
+        and(
+          eq(promptVariants.dealershipId, dealershipId),
+          eq(promptVariants.isControl, true)
+        )
+      );
+    
+    // Set the new control variant
+    const [controlVariant] = await db.update(promptVariants)
+      .set({ 
+        isControl: true,
+        updatedAt: new Date()
+      })
+      .where(eq(promptVariants.id, id))
+      .returning();
+    
+    return controlVariant;
+  }
+
+  // A/B Testing - Experiment operations
+  async getPromptExperiment(id: number): Promise<PromptExperiment | undefined> {
+    const [experiment] = await db.select().from(promptExperiments).where(eq(promptExperiments.id, id));
+    return experiment;
+  }
+
+  async getPromptExperimentWithVariants(id: number): Promise<any | undefined> {
+    const [experiment] = await db.select().from(promptExperiments).where(eq(promptExperiments.id, id));
+    
+    if (!experiment) {
+      return undefined;
+    }
+    
+    // Get all variants for this experiment
+    const experimentVariantsWithData = await db.select({
+      assignment: experimentVariants,
+      variant: promptVariants
+    })
+    .from(experimentVariants)
+    .innerJoin(
+      promptVariants,
+      eq(experimentVariants.variantId, promptVariants.id)
+    )
+    .where(eq(experimentVariants.experimentId, id));
+    
+    const variants = experimentVariantsWithData.map(item => ({
+      id: item.variant.id,
+      name: item.variant.name,
+      promptTemplate: item.variant.promptTemplate,
+      isControl: item.variant.isControl,
+      trafficAllocation: item.assignment.trafficAllocation
+    }));
+    
+    return {
+      ...experiment,
+      variants
+    };
+  }
+
+  async getPromptExperiments(dealershipId: number): Promise<PromptExperiment[]> {
+    return await db.select()
+      .from(promptExperiments)
+      .where(eq(promptExperiments.dealershipId, dealershipId))
+      .orderBy(desc(promptExperiments.createdAt));
+  }
+
+  async getActivePromptExperiments(dealershipId: number): Promise<PromptExperiment[]> {
+    const now = new Date();
+    
+    return await db.select()
+      .from(promptExperiments)
+      .where(
+        and(
+          eq(promptExperiments.dealershipId, dealershipId),
+          eq(promptExperiments.isActive, true),
+          lte(promptExperiments.startDate, now),
+          or(
+            isNull(promptExperiments.endDate),
+            gte(promptExperiments.endDate, now)
+          )
+        )
+      )
+      .orderBy(desc(promptExperiments.createdAt));
+  }
+
+  async createPromptExperiment(experiment: InsertPromptExperiment): Promise<PromptExperiment> {
+    const [newExperiment] = await db.insert(promptExperiments).values(experiment).returning();
+    return newExperiment;
+  }
+
+  async updatePromptExperiment(id: number, experiment: Partial<InsertPromptExperiment>): Promise<PromptExperiment | undefined> {
+    const [updatedExperiment] = await db.update(promptExperiments)
+      .set(experiment)
+      .where(eq(promptExperiments.id, id))
+      .returning();
+    return updatedExperiment;
+  }
+
+  // A/B Testing - Experiment Variant operations
+  async addVariantToExperiment(experimentId: number, variantId: number, trafficAllocation: number): Promise<ExperimentVariant> {
+    const [experimentVariant] = await db.insert(experimentVariants)
+      .values({
+        experimentId,
+        variantId,
+        trafficAllocation
+      })
+      .returning();
+    return experimentVariant;
+  }
+
+  async removeVariantFromExperiment(experimentId: number, variantId: number): Promise<boolean> {
+    const result = await db.delete(experimentVariants)
+      .where(
+        and(
+          eq(experimentVariants.experimentId, experimentId),
+          eq(experimentVariants.variantId, variantId)
+        )
+      );
+    
+    return result.rowCount > 0;
+  }
+
+  async updateVariantTrafficAllocation(experimentId: number, variantId: number, trafficAllocation: number): Promise<ExperimentVariant | undefined> {
+    const [updatedVariant] = await db.update(experimentVariants)
+      .set({ trafficAllocation })
+      .where(
+        and(
+          eq(experimentVariants.experimentId, experimentId),
+          eq(experimentVariants.variantId, variantId)
+        )
+      )
+      .returning();
+    return updatedVariant;
+  }
+
+  // A/B Testing - Metrics operations
+  async getPromptMetrics(variantId: number): Promise<PromptMetrics[]> {
+    return await db.select()
+      .from(promptMetrics)
+      .where(eq(promptMetrics.variantId, variantId))
+      .orderBy(desc(promptMetrics.createdAt));
+  }
+
+  async getPromptMetricsByConversation(conversationId: number): Promise<PromptMetrics | undefined> {
+    const [metric] = await db.select()
+      .from(promptMetrics)
+      .where(eq(promptMetrics.conversationId, conversationId));
+    return metric;
+  }
+
+  async createPromptMetric(metric: InsertPromptMetrics): Promise<PromptMetrics> {
+    const [newMetric] = await db.insert(promptMetrics).values(metric).returning();
+    return newMetric;
+  }
+
+  async updatePromptMetric(id: number, metric: Partial<InsertPromptMetrics>): Promise<PromptMetrics | undefined> {
+    const [updatedMetric] = await db.update(promptMetrics)
+      .set(metric)
+      .where(eq(promptMetrics.id, id))
+      .returning();
+    return updatedMetric;
   }
 }
 
