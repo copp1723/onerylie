@@ -14,6 +14,7 @@ import MemoryStore from "memorystore";
 import emailReportRoutes from "./routes/email-reports";
 import reportApiRoutes from "./routes/report-api";
 import abtestRoutes from "./routes/abtest-routes";
+import personaRoutes from "./routes/persona-routes";
 import { log } from "./vite";
 
 // Define validation schemas
@@ -102,6 +103,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register A/B testing routes
   app.use('/api/abtest', abtestRoutes);
+  
+  // Register persona management routes
+  app.use('/api/personas', personaRoutes);
   
   // Set up scheduled task to process email reports
   // In a production environment, this would be handled by a proper scheduler
