@@ -1,5 +1,6 @@
-import { Router, Response } from 'express';
-import { apiKeyAuth, type AuthenticatedRequest, sessionAuth } from '../middleware/auth';
+import { Router, Response, Request } from 'express';
+import { apiKeyAuth, type AuthenticatedRequest } from '../middleware/auth';
+import { isAuthenticated, isAdmin } from '../replitAuth';
 import { z } from 'zod';
 import { db } from '../db';
 import { personas, insertPersonaSchema } from '@shared/schema';
@@ -9,7 +10,7 @@ import { storage } from '../storage';
 const router = Router();
 
 // Get all personas for a dealership
-router.get('/', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', isAuthenticated, async (req: any, res: Response) => {
   try {
     const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
@@ -41,7 +42,7 @@ router.get('/api', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) 
 });
 
 // Get a specific persona
-router.get('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', isAuthenticated, async (req: any, res: Response) => {
   try {
     const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
@@ -71,7 +72,7 @@ router.get('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response)
 });
 
 // Create a new persona
-router.post('/', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', isAuthenticated, async (req: any, res: Response) => {
   try {
     const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
@@ -114,7 +115,7 @@ router.post('/', sessionAuth, async (req: AuthenticatedRequest, res: Response) =
 });
 
 // Update a persona
-router.patch('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id', isAuthenticated, async (req: any, res: Response) => {
   try {
     const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {
@@ -180,7 +181,7 @@ router.patch('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Respons
 });
 
 // Delete a persona
-router.delete('/:id', sessionAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', isAuthenticated, async (req: any, res: Response) => {
   try {
     const dealershipId = req.session?.user?.dealershipId;
     if (!dealershipId) {

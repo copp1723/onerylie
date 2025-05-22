@@ -1,16 +1,15 @@
 import express, { type Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
 import { z } from "zod";
 import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments, type HandoverDossier } from "./services/openai";
 import { sendHandoverEmail, sendConversationSummary } from "./services/email";
 import { generateABTestedResponse } from "./services/abtest-openai-integration";
 import { processScheduledReports } from "./services/scheduler";
-import session from "express-session";
-import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
-import MemoryStore from "memorystore";
+import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { users } from "@shared/schema";
 import emailReportRoutes from "./routes/email-reports";
 import reportApiRoutes from "./routes/report-api";
 import abtestRoutes from "./routes/abtest-routes";
@@ -48,48 +47,18 @@ const loginSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Set up session management
-  const MemoryStoreSession = MemoryStore(session);
-  app.use(session({
-    secret: process.env.SESSION_SECRET || "rylie-ai-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 24 * 60 * 60 * 1000 },
-    store: new MemoryStoreSession({
-      checkPeriod: 86400000 // 24 hours
-    })
-  }));
-
-  // Initialize passport for user authentication
-  app.use(passport.initialize());
-  app.use(passport.session());
-
-  passport.use(new LocalStrategy(async (username, password, done) => {
+  // Setup Replit Auth for secure authentication
+  await setupAuth(app);
+  
+  // Authentication endpoint for getting current user info
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return done(null, false, { message: 'Incorrect username.' });
-      }
-      // In production, compare with hashed password
-      if (user.password !== password) {
-        return done(null, false, { message: 'Incorrect password.' });
-      }
-      return done(null, user);
-    } catch (err) {
-      return done(err);
-    }
-  }));
-
-  passport.serializeUser((user: any, done) => {
-    done(null, user.id);
-  });
-
-  passport.deserializeUser(async (id: number, done) => {
-    try {
-      const user = await storage.getUser(id);
-      done(null, user);
-    } catch (err) {
-      done(err, null);
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
