@@ -60,9 +60,7 @@ async function seedDatabase() {
       await db.insert(users).values({
         id: adminId,
         email: 'admin@testdealership.com',
-        first_name: 'Admin',
-        last_name: 'User',
-        profile_image_url: 'https://ui-avatars.com/api/?name=Admin+User',
+        name: 'Admin User',
         role: 'admin',
         dealershipId
       });
