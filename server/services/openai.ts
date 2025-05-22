@@ -276,7 +276,6 @@ COMPLIANCE RULES (EXTREMELY IMPORTANT):
 3. NEVER make up information about vehicles
 4. If you don't know something, suggest the customer speak with a sales representative
 5. ALWAYS be professional, helpful, and conversational
-${personaArguments?.constraints ? `\n${personaArguments.constraints}` : ''}
 
 RESPONSE FORMAT:
 You must respond with a JSON object having these fields:
@@ -302,8 +301,26 @@ ${personaTemplate}
 
   // Inject persona arguments
   let finalPrompt = baseInstructions;
+  
+  // Add constraints if available
+  if (personaArguments?.constraints) {
+    finalPrompt += `\n${personaArguments.constraints}`;
+  }
+  
+  // Add URL information if available as simple text
+  if (personaArguments?.tradeInUrl) {
+    finalPrompt += `\n\nTRADE-IN URL: ${personaArguments.tradeInUrl}`;
+  }
+  
+  if (personaArguments?.financeApplicationUrl) {
+    finalPrompt += `\n\nFINANCE APPLICATION URL: ${personaArguments.financeApplicationUrl}`;
+  }
+  
+  // Process other template variables
   for (const [key, value] of Object.entries(personaArguments)) {
-    finalPrompt = finalPrompt.replace(`{${key}}`, Array.isArray(value) ? value.join(', ') : value);
+    if (value && typeof value !== 'undefined') {
+      finalPrompt = finalPrompt.replace(new RegExp(`\\{${key}\\}`, 'g'), Array.isArray(value) ? value.join(', ') : String(value));
+    }
   }
   
   return finalPrompt;
