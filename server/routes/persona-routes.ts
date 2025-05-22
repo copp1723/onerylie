@@ -12,11 +12,18 @@ const router = Router();
 // Get all personas for a dealership
 router.get('/', isAuthenticated, async (req: any, res: Response) => {
   try {
-    const dealershipId = req.session?.user?.dealershipId;
-    if (!dealershipId) {
+    // Get user info from Replit Auth
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Authentication required' });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || !user.dealershipId) {
       return res.status(403).json({ message: 'Not authorized to access personas' });
     }
     
+    const dealershipId = user.dealershipId;
     const personasList = await storage.getPersonasByDealership(dealershipId);
     return res.json(personasList);
   } catch (error) {
@@ -44,10 +51,18 @@ router.get('/api', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) 
 // Get a specific persona
 router.get('/:id', isAuthenticated, async (req: any, res: Response) => {
   try {
-    const dealershipId = req.session?.user?.dealershipId;
-    if (!dealershipId) {
+    // Get user info from Replit Auth
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Authentication required' });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || !user.dealershipId) {
       return res.status(403).json({ message: 'Not authorized to access personas' });
     }
+    
+    const dealershipId = user.dealershipId;
     
     const personaId = parseInt(req.params.id);
     if (isNaN(personaId)) {
@@ -74,10 +89,18 @@ router.get('/:id', isAuthenticated, async (req: any, res: Response) => {
 // Create a new persona
 router.post('/', isAuthenticated, async (req: any, res: Response) => {
   try {
-    const dealershipId = req.session?.user?.dealershipId;
-    if (!dealershipId) {
+    // Get user info from Replit Auth
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Authentication required' });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || !user.dealershipId) {
       return res.status(403).json({ message: 'Not authorized to create personas' });
     }
+    
+    const dealershipId = user.dealershipId;
     
     // Parse and validate the request body
     const personaData = insertPersonaSchema.parse({
@@ -117,10 +140,18 @@ router.post('/', isAuthenticated, async (req: any, res: Response) => {
 // Update a persona
 router.patch('/:id', isAuthenticated, async (req: any, res: Response) => {
   try {
-    const dealershipId = req.session?.user?.dealershipId;
-    if (!dealershipId) {
+    // Get user info from Replit Auth
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Authentication required' });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || !user.dealershipId) {
       return res.status(403).json({ message: 'Not authorized to update personas' });
     }
+    
+    const dealershipId = user.dealershipId;
     
     const personaId = parseInt(req.params.id);
     if (isNaN(personaId)) {
@@ -183,10 +214,18 @@ router.patch('/:id', isAuthenticated, async (req: any, res: Response) => {
 // Delete a persona
 router.delete('/:id', isAuthenticated, async (req: any, res: Response) => {
   try {
-    const dealershipId = req.session?.user?.dealershipId;
-    if (!dealershipId) {
+    // Get user info from Replit Auth
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: Authentication required' });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || !user.dealershipId) {
       return res.status(403).json({ message: 'Not authorized to delete personas' });
     }
+    
+    const dealershipId = user.dealershipId;
     
     const personaId = parseInt(req.params.id);
     if (isNaN(personaId)) {
