@@ -1,0 +1,481 @@
+import express, { type Express, Request, Response } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { z } from "zod";
+import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
+import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments } from "./services/openai";
+import session from "express-session";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import MemoryStore from "memorystore";
+
+// Define validation schemas
+const inboundMessageSchema = z.object({
+  customerMessage: z.string(),
+  customerName: z.string(),
+  customerPhone: z.string().optional(),
+  customerEmail: z.string().email().optional(),
+  dealershipId: z.number(),
+  conversationId: z.number().optional(),
+  channel: z.string().default("sms"),
+  campaignContext: z.string().optional(),
+  inventoryContext: z.string().optional(),
+});
+
+const replySchema = z.object({
+  conversationId: z.number(),
+  message: z.string(),
+});
+
+const handoverSchema = z.object({
+  conversationId: z.number(),
+  reason: z.string().optional(),
+  assignToUserId: z.number().optional(),
+});
+
+const loginSchema = z.object({
+  username: z.string(),
+  password: z.string(),
+});
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up session management
+  const MemoryStoreSession = MemoryStore(session);
+  app.use(session({
+    secret: process.env.SESSION_SECRET || "rylie-ai-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 24 * 60 * 60 * 1000 },
+    store: new MemoryStoreSession({
+      checkPeriod: 86400000 // 24 hours
+    })
+  }));
+
+  // Initialize passport for user authentication
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.use(new LocalStrategy(async (username, password, done) => {
+    try {
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return done(null, false, { message: 'Incorrect username.' });
+      }
+      // In production, compare with hashed password
+      if (user.password !== password) {
+        return done(null, false, { message: 'Incorrect password.' });
+      }
+      return done(null, user);
+    } catch (err) {
+      return done(err);
+    }
+  }));
+
+  passport.serializeUser((user: any, done) => {
+    done(null, user.id);
+  });
+
+  passport.deserializeUser(async (id: number, done) => {
+    try {
+      const user = await storage.getUser(id);
+      done(null, user);
+    } catch (err) {
+      done(err, null);
+    }
+  });
+
+  // Create HTTP server
+  const httpServer = createServer(app);
+
+  // Authentication routes
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { username, password } = loginSchema.parse(req.body);
+      
+      passport.authenticate('local', (err, user, info) => {
+        if (err) {
+          return res.status(500).json({ message: 'Authentication error' });
+        }
+        if (!user) {
+          return res.status(401).json({ message: info.message || 'Authentication failed' });
+        }
+        req.login(user, (err) => {
+          if (err) {
+            return res.status(500).json({ message: 'Login error' });
+          }
+          return res.json({ 
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+            role: user.role
+          });
+        });
+      })(req, res);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
+      }
+      return res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    req.logout(() => {
+      res.json({ message: 'Logged out successfully' });
+    });
+  });
+
+  app.get('/api/auth/me', (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+    const user = req.user as any;
+    return res.json({ 
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+  });
+
+  // API endpoints for Rylie
+  // 1. Inbound message endpoint
+  app.post('/api/inbound', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { 
+        customerMessage, 
+        customerName, 
+        customerPhone, 
+        customerEmail, 
+        conversationId,
+        channel,
+        campaignContext,
+        inventoryContext
+      } = inboundMessageSchema.parse({
+        ...req.body,
+        dealershipId: req.dealershipId
+      });
+
+      // Get the dealership info
+      const dealership = await storage.getDealership(req.dealershipId!);
+      if (!dealership) {
+        return res.status(404).json({ message: 'Dealership not found' });
+      }
+
+      // Check for escalation keywords
+      const shouldEscalateBasedOnKeywords = detectEscalationKeywords(customerMessage);
+
+      let conversation;
+      let previousMessages = [];
+
+      // Get or create conversation
+      if (conversationId) {
+        conversation = await storage.getConversation(conversationId);
+        if (!conversation) {
+          return res.status(404).json({ message: 'Conversation not found' });
+        }
+
+        // Get previous messages
+        const messageHistory = await storage.getMessagesByConversation(conversationId);
+        previousMessages = messageHistory.map(msg => ({
+          role: msg.isFromCustomer ? 'customer' : 'assistant',
+          content: msg.content
+        }));
+      } else {
+        // Create a new conversation
+        conversation = await storage.createConversation({
+          dealershipId: req.dealershipId!,
+          customerName,
+          customerPhone,
+          customerEmail,
+          campaignContext,
+          inventoryContext,
+          status: 'active'
+        });
+      }
+
+      // Store the customer message
+      await storage.createMessage({
+        conversationId: conversation.id,
+        content: customerMessage,
+        isFromCustomer: true,
+        channel,
+      });
+
+      // If we should escalate based on keywords, do it immediately
+      if (shouldEscalateBasedOnKeywords) {
+        await storage.updateConversationStatus(conversation.id, 'escalated');
+        return res.json({
+          conversationId: conversation.id,
+          response: "I'll connect you with one of our representatives who can help with your specific request. They'll be in touch with you shortly.",
+          status: 'escalated',
+          escalationReason: 'Detected sensitive topic requiring human assistance'
+        });
+      }
+
+      // Analyze message for vehicle intent
+      const vehicleIntent = await analyzeMessageForVehicleIntent(customerMessage);
+      
+      // Find relevant vehicles based on intent
+      let relevantVehicles = [];
+      if (vehicleIntent.make || vehicleIntent.model) {
+        const searchQuery = [vehicleIntent.make, vehicleIntent.model].filter(Boolean).join(' ');
+        if (searchQuery) {
+          relevantVehicles = await storage.searchVehicles(req.dealershipId!, searchQuery);
+        }
+      }
+
+      // Get the default persona for this dealership
+      const persona = await storage.getDefaultPersonaForDealership(req.dealershipId!);
+      if (!persona) {
+        return res.status(404).json({ message: 'No default persona configured for this dealership' });
+      }
+
+      // Build context for the AI
+      const context: ConversationContext = {
+        customerName,
+        dealershipName: dealership.name,
+        campaignContext: campaignContext || conversation.campaignContext || undefined,
+        previousMessages,
+        relevantVehicles
+      };
+
+      // Generate AI response
+      const { response, shouldEscalate, reason } = await generateResponse(
+        customerMessage,
+        context,
+        persona.promptTemplate,
+        persona.arguments as PersonaArguments
+      );
+
+      // Store the AI response
+      await storage.createMessage({
+        conversationId: conversation.id,
+        content: response,
+        isFromCustomer: false,
+        channel,
+      });
+
+      // Update conversation status if needed
+      if (shouldEscalate) {
+        await storage.updateConversationStatus(conversation.id, 'escalated');
+      }
+
+      // Return the response
+      return res.json({
+        conversationId: conversation.id,
+        response,
+        status: shouldEscalate ? 'escalated' : 'active',
+        escalationReason: shouldEscalate ? reason : undefined
+      });
+    } catch (error) {
+      console.error('Error processing inbound message:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
+      }
+      return res.status(500).json({ message: 'Server error processing inbound message' });
+    }
+  });
+
+  // 2. Reply endpoint - get AI response only
+  app.post('/api/reply', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { conversationId, message } = replySchema.parse(req.body);
+
+      // Verify the conversation belongs to this dealership
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation || conversation.dealershipId !== req.dealershipId) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+
+      // Get the dealership info
+      const dealership = await storage.getDealership(req.dealershipId!);
+      if (!dealership) {
+        return res.status(404).json({ message: 'Dealership not found' });
+      }
+
+      // Get previous messages
+      const messageHistory = await storage.getMessagesByConversation(conversationId);
+      const previousMessages = messageHistory.map(msg => ({
+        role: msg.isFromCustomer ? 'customer' : 'assistant',
+        content: msg.content
+      }));
+
+      // Get the default persona for this dealership
+      const persona = await storage.getDefaultPersonaForDealership(req.dealershipId!);
+      if (!persona) {
+        return res.status(404).json({ message: 'No default persona configured for this dealership' });
+      }
+
+      // Build context for the AI
+      const context: ConversationContext = {
+        customerName: conversation.customerName,
+        dealershipName: dealership.name,
+        campaignContext: conversation.campaignContext || undefined,
+        previousMessages,
+      };
+
+      // Generate AI response
+      const { response, shouldEscalate, reason } = await generateResponse(
+        message,
+        context,
+        persona.promptTemplate,
+        persona.arguments as PersonaArguments
+      );
+
+      // Return the response without storing it
+      return res.json({
+        response,
+        shouldEscalate,
+        escalationReason: shouldEscalate ? reason : undefined
+      });
+    } catch (error) {
+      console.error('Error generating reply:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
+      }
+      return res.status(500).json({ message: 'Server error generating reply' });
+    }
+  });
+
+  // 3. Handover endpoint - escalate to human
+  app.post('/api/handover', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { conversationId, reason, assignToUserId } = handoverSchema.parse(req.body);
+
+      // Verify the conversation belongs to this dealership
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation || conversation.dealershipId !== req.dealershipId) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+
+      // Escalate the conversation
+      const updatedConversation = await storage.escalateConversation(
+        conversationId, 
+        assignToUserId || 0
+      );
+
+      // Add system message about escalation
+      await storage.createMessage({
+        conversationId,
+        content: `Conversation escalated to human support. Reason: ${reason || 'Not specified'}`,
+        isFromCustomer: false,
+        channel: 'system',
+        metadata: { reason, escalatedBy: req.apiKey }
+      });
+
+      return res.json({
+        success: true,
+        conversation: updatedConversation
+      });
+    } catch (error) {
+      console.error('Error handling handover:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
+      }
+      return res.status(500).json({ message: 'Server error processing handover' });
+    }
+  });
+
+  // Admin API routes for dashboard
+  // Dealerships
+  app.get('/api/dealerships', async (req, res) => {
+    try {
+      const dealerships = await storage.getDealerships();
+      res.json(dealerships);
+    } catch (error) {
+      console.error('Error fetching dealerships:', error);
+      res.status(500).json({ message: 'Server error fetching dealerships' });
+    }
+  });
+
+  // Conversations
+  app.get('/api/dealerships/:dealershipId/conversations', async (req, res) => {
+    try {
+      const dealershipId = parseInt(req.params.dealershipId);
+      const conversations = await storage.getConversationsByDealership(dealershipId);
+      res.json(conversations);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      res.status(500).json({ message: 'Server error fetching conversations' });
+    }
+  });
+
+  // Conversation details with messages
+  app.get('/api/conversations/:conversationId', async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.conversationId);
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      const messages = await storage.getMessagesByConversation(conversationId);
+      res.json({ conversation, messages });
+    } catch (error) {
+      console.error('Error fetching conversation details:', error);
+      res.status(500).json({ message: 'Server error fetching conversation details' });
+    }
+  });
+
+  // Inventory
+  app.get('/api/dealerships/:dealershipId/inventory', async (req, res) => {
+    try {
+      const dealershipId = parseInt(req.params.dealershipId);
+      const vehicles = await storage.getVehiclesByDealership(dealershipId);
+      res.json(vehicles);
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+      res.status(500).json({ message: 'Server error fetching inventory' });
+    }
+  });
+
+  // Personas
+  app.get('/api/dealerships/:dealershipId/personas', async (req, res) => {
+    try {
+      const dealershipId = parseInt(req.params.dealershipId);
+      const personas = await storage.getPersonasByDealership(dealershipId);
+      res.json(personas);
+    } catch (error) {
+      console.error('Error fetching personas:', error);
+      res.status(500).json({ message: 'Server error fetching personas' });
+    }
+  });
+
+  // API Keys
+  app.get('/api/dealerships/:dealershipId/apikeys', async (req, res) => {
+    try {
+      const dealershipId = parseInt(req.params.dealershipId);
+      const apiKeys = await storage.getApiKeysByDealership(dealershipId);
+      
+      // Mask the actual key values for security
+      const maskedKeys = apiKeys.map(key => ({
+        ...key,
+        key: `${key.key.substring(0, 8)}...${key.key.substring(key.key.length - 4)}`
+      }));
+      
+      res.json(maskedKeys);
+    } catch (error) {
+      console.error('Error fetching API keys:', error);
+      res.status(500).json({ message: 'Server error fetching API keys' });
+    }
+  });
+
+  // Generate new API key
+  app.post('/api/dealerships/:dealershipId/apikeys', async (req, res) => {
+    try {
+      const dealershipId = parseInt(req.params.dealershipId);
+      const { description } = req.body;
+      
+      const apiKey = await storage.generateApiKey(dealershipId, description);
+      res.json(apiKey);
+    } catch (error) {
+      console.error('Error generating API key:', error);
+      res.status(500).json({ message: 'Server error generating API key' });
+    }
+  });
+
+  return httpServer;
+}
