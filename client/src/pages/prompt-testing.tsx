@@ -10,6 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { 
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from "@/components/ui/accordion";
 // Import components
 import { ChatMessage } from "../components/chat-message";
 
@@ -514,6 +520,39 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
                     <div className="flex justify-center items-center p-4">
                       <Loader2 className="h-6 w-6 animate-spin text-primary" />
                       <span className="ml-2">Generating response...</span>
+                    </div>
+                  )}
+                  
+                  {/* Show channel type and other metadata */}
+                  {channelType && conversationHistory.length > 0 && (
+                    <div className="bg-muted p-3 rounded-md mt-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Badge variant={channelType === 'email' ? 'default' : 'secondary'}>
+                          {channelType === 'email' ? 'Email Response' : 'SMS Response'}
+                        </Badge>
+                        {jsonDetails?.sales_readiness && (
+                          <Badge variant={jsonDetails.sales_readiness === 'high' ? 'destructive' : 
+                                         jsonDetails.sales_readiness === 'medium' ? 'warning' : 'outline'}>
+                            Sales Readiness: {jsonDetails.sales_readiness}
+                          </Badge>
+                        )}
+                        {jsonDetails?.retrieve_inventory_data && (
+                          <Badge variant="warning">Needs Inventory Data</Badge>
+                        )}
+                      </div>
+                      
+                      {jsonDetails && (
+                        <Accordion type="single" collapsible className="w-full">
+                          <AccordionItem value="json-details">
+                            <AccordionTrigger>View JSON Response Details</AccordionTrigger>
+                            <AccordionContent>
+                              <pre className="text-xs overflow-auto max-h-[200px] bg-background p-2 rounded-md">
+                                {JSON.stringify(jsonDetails, null, 2)}
+                              </pre>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      )}
                     </div>
                   )}
                 </div>
