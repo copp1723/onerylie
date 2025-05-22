@@ -15,6 +15,7 @@ import emailReportRoutes from "./routes/email-reports";
 import reportApiRoutes from "./routes/report-api";
 import abtestRoutes from "./routes/abtest-routes";
 import personaRoutes from "./routes/persona-routes";
+import inventoryRoutes from "./routes/inventory-routes";
 import { log } from "./vite";
 
 // Define validation schemas
@@ -106,6 +107,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register persona management routes
   app.use('/api/personas', personaRoutes);
+  
+  // Register inventory management routes
+  app.use('/api/inventory', inventoryRoutes);
   
   // Set up scheduled task to process email reports
   // In a production environment, this would be handled by a proper scheduler
