@@ -8,6 +8,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 export interface PersonaArguments {
   tone?: string;
   priorityFeatures?: string[];
+  tradeInUrl?: string;
+  financingUrl?: string;
+  handoverEmail?: string;
   [key: string]: any;
 }
 
@@ -23,13 +26,29 @@ export interface ConversationContext {
   relevantVehicles?: Vehicle[];
 }
 
+// Type for handover dossier
+export interface HandoverDossier {
+  customerName: string;
+  dealershipName: string;
+  customerPersonality: string;
+  customerPriorities: string[];
+  vehicleInterests: string[];
+  conversationSummary: string;
+  suggestedApproach: string;
+  conversationHistory: {
+    role: "customer" | "assistant";
+    content: string;
+    timestamp?: string;
+  }[];
+}
+
 // Process incoming customer message and generate a response
 export async function generateResponse(
   customerMessage: string,
   context: ConversationContext,
   personaTemplate: string,
   personaArguments: PersonaArguments
-): Promise<{ response: string; shouldEscalate: boolean; reason?: string }> {
+): Promise<{ response: string; shouldEscalate: boolean; reason?: string; handoverDossier?: HandoverDossier }> {
   try {
     // Build the complete system prompt with persona configuration
     const systemPrompt = buildSystemPrompt(personaTemplate, personaArguments, context);
@@ -53,16 +72,28 @@ export async function generateResponse(
       messages: messages as any,
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 1500,
     });
     
     // Parse the response
     const jsonResponse = JSON.parse(completion.choices[0].message.content || "{}");
     
+    // Detect if this message should trigger escalation based on content
+    const containsEscalationKeywords = detectEscalationKeywords(customerMessage);
+    const shouldEscalate = jsonResponse.escalate || containsEscalationKeywords;
+    
+    // If escalation is needed, generate a handover dossier
+    let handoverDossier: HandoverDossier | undefined;
+    
+    if (shouldEscalate) {
+      handoverDossier = await generateHandoverDossier(customerMessage, context);
+    }
+    
     return {
       response: jsonResponse.response || "I'm sorry, I couldn't process your request.",
-      shouldEscalate: jsonResponse.escalate || false,
-      reason: jsonResponse.escalate ? jsonResponse.reason : undefined
+      shouldEscalate: shouldEscalate,
+      reason: shouldEscalate ? (jsonResponse.reason || "Customer query requires human assistance") : undefined,
+      handoverDossier: handoverDossier
     };
   } catch (error) {
     console.error("Error generating response:", error);
@@ -70,6 +101,97 @@ export async function generateResponse(
       response: "I apologize, but I'm having trouble processing your request right now. Let me connect you with a human representative who can assist you.",
       shouldEscalate: true,
       reason: "LLM processing error"
+    };
+  }
+}
+
+// Generate a comprehensive handover dossier for human representatives
+export async function generateHandoverDossier(
+  lastCustomerMessage: string,
+  context: ConversationContext
+): Promise<HandoverDossier> {
+  try {
+    const conversationHistory = context.previousMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+    
+    // Add the current message to history
+    conversationHistory.push({
+      role: "customer",
+      content: lastCustomerMessage
+    });
+    
+    const prompt = `
+Based on the conversation history, create a comprehensive handover dossier for a sales representative who will take over this conversation. 
+The goal is to provide enough context so they can quickly understand the customer's needs, personality, and interests.
+
+DOSSIER FORMAT:
+Return a JSON object with the following fields:
+- customerName: The customer's name
+- dealershipName: The dealership name
+- customerPersonality: A brief description of the customer's personality traits, communication style, and current mood
+- customerPriorities: An array of what seems important to this customer (features, concerns, etc.)
+- vehicleInterests: An array of vehicles or vehicle types the customer has expressed interest in
+- conversationSummary: A concise summary of the conversation so far
+- suggestedApproach: Recommended strategy for the sales rep to continue the conversation
+
+FORMAT EXACTLY AS REQUESTED WITH ALL FIELDS. This is a critical sales handover document.
+`;
+    
+    // Vehicle information if available
+    let vehicleInfo = "";
+    if (context.relevantVehicles && context.relevantVehicles.length > 0) {
+      vehicleInfo = "Available vehicles that may be relevant:\n";
+      context.relevantVehicles.forEach((vehicle, index) => {
+        vehicleInfo += `${index + 1}. ${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim || ''}\n`;
+      });
+    }
+    
+    const messages = [
+      { 
+        role: "system", 
+        content: prompt + "\n\nCustomer: " + context.customerName + "\nDealership: " + context.dealershipName + "\n" + vehicleInfo
+      },
+      { 
+        role: "user", 
+        content: "Here's the conversation history:\n" + 
+          conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join("\n\n")
+      }
+    ];
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: messages as any,
+      response_format: { type: "json_object" },
+      temperature: 0.5,
+      max_tokens: 2000,
+    });
+    
+    const dossier = JSON.parse(completion.choices[0].message.content || "{}");
+    
+    // Add timestamps to the conversation history for the dossier
+    dossier.conversationHistory = conversationHistory.map((msg, index) => ({
+      ...msg,
+      timestamp: new Date(Date.now() - (conversationHistory.length - index) * 5 * 60000).toISOString()
+    }));
+    
+    return dossier as HandoverDossier;
+  } catch (error) {
+    console.error("Error generating handover dossier:", error);
+    // Return a basic dossier if we encounter an error
+    return {
+      customerName: context.customerName,
+      dealershipName: context.dealershipName,
+      customerPersonality: "Unable to analyze",
+      customerPriorities: ["Unable to determine"],
+      vehicleInterests: ["Unable to determine"],
+      conversationSummary: "Error generating summary",
+      suggestedApproach: "Review the conversation history and contact the customer promptly",
+      conversationHistory: context.previousMessages.concat([{
+        role: "customer",
+        content: lastCustomerMessage
+      }])
     };
   }
 }
@@ -93,12 +215,31 @@ function buildSystemPrompt(
     });
   }
   
-  // Base instructions that always apply
+  // Base instructions with updated style guide
   const baseInstructions = `
 You are Rylie, an AI assistant for ${context.dealershipName}. You're speaking with ${context.customerName}.
 
+STYLE & TONE GUIDE:
+- Always greet customers warmly and personally (e.g., "Hey ${context.customerName}, great to hear from you!").
+- Keep it natural, friendly, and engaging—like chatting with a helpful salesperson, not a stiff bot.
+- Adapt dynamically to the customer's mood and urgency.
+- Avoid formal greetings like "Dear" or robotic phrases like "delving into specifics."
+- Use casual, friendly phrasing (e.g., "Happy to help!").
+
+NEXT STEPS:
+- Every response must end with a clear action step framed as a friendly invitation.
+
+URL HANDLING & VALUE-DRIVEN INTEGRATION:
+${personaArguments.tradeInUrl ? `- If the customer mentions trade-ins, include this trade-in link: ${personaArguments.tradeInUrl}` : ''}
+${personaArguments.financingUrl ? `- If financing comes up, include this financing link: ${personaArguments.financingUrl}` : ''}
+
+CONCISENESS & FORMATTING:
+- Keep responses short: max 5 sentences OR 3 short paragraphs.
+- Use line breaks to avoid dense text walls.
+- Skip over-explaining.
+
 COMPLIANCE RULES (EXTREMELY IMPORTANT):
-1. NEVER mention price, financing, or payment terms
+1. DO NOT mention, imply, or hint at specific pricing, payments, shipping, or delivery
 2. NEVER mention vehicles that aren't in the provided inventory list
 3. NEVER make up information about vehicles
 4. If you don't know something, suggest the customer speak with a sales representative
@@ -109,6 +250,14 @@ You must respond with a JSON object having these fields:
 - "response": Your message to the customer (string)
 - "escalate": Whether this conversation should be escalated to a human (boolean)
 - "reason": If escalating, briefly explain why (string, optional)
+
+When to escalate:
+- Customer mentions legal concerns or a competitor's offer
+- Customer asks for a human agent
+- Customer requests specific pricing or financing details
+- Customer is ready to make a purchase
+- Customer has complex questions that require deep product expertise
+- Customer shows high buying intent and needs personal attention to close the deal
 
 ${context.campaignContext ? `CAMPAIGN CONTEXT:\n${context.campaignContext}\n` : ''}
 
@@ -130,10 +279,11 @@ ${personaTemplate}
 // Detect keywords that should trigger escalation
 export function detectEscalationKeywords(message: string): boolean {
   const escalationKeywords = [
-    "financing", "finance", "loan", "credit", "payment", "lease", "trade-in", "trade in",
-    "discount", "negotiate", "bargain", "best price", "offer", "buy now", 
-    "speak to a human", "talk to a person", "talk to a manager", "speak with manager", 
-    "speak with representative", "speak with sales"
+    "pricing details", "exact price", "final price", "best deal", "bottom line",
+    "negotiate", "bargain", "best price", "speak to a human", "talk to a person", 
+    "talk to a manager", "speak with manager", "speak with representative", "speak with sales",
+    "legal", "lawyer", "attorney", "lawsuit", "competitor offer", "other dealer",
+    "ready to buy", "purchase now", "sign papers", "when can I come in"
   ];
   
   const lowercaseMessage = message.toLowerCase();
