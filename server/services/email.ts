@@ -1,129 +1,188 @@
-import sgMail from '@sendgrid/mail';
-import { HandoverDossier } from './openai';
-import { Conversation, Message } from '@shared/schema';
+/**
+ * Email Service
+ * 
+ * This service handles sending emails via SendGrid
+ */
 
-// Initialize SendGrid with the API key
-sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
+import { MailService } from '@sendgrid/mail';
 
-interface SendHandoverEmailParams {
-  toEmail: string;
-  fromEmail: string;
-  dossier: HandoverDossier;
+// Initialize mail service if API key is available
+let mailService: MailService | null = null;
+if (process.env.SENDGRID_API_KEY) {
+  mailService = new MailService();
+  mailService.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-interface SendConversationSummaryParams {
-  toEmail: string;
-  fromEmail: string;
-  conversation: Conversation;
-  messages: Message[];
-  dealershipName: string;
+// Email parameters interface
+interface EmailParams {
+  to: string;
+  from: string;
+  subject: string;
+  text?: string;
+  html?: string;
 }
 
 /**
- * Sends a conversation summary email to the specified recipient
+ * Send an email using SendGrid
+ * 
+ * @param apiKey SendGrid API key
+ * @param params Email parameters (to, from, subject, text/html)
+ * @returns Success status
  */
-export async function sendConversationSummary({
-  toEmail,
-  fromEmail,
-  conversation,
-  messages,
-  dealershipName
-}: SendConversationSummaryParams): Promise<boolean> {
+export async function sendEmail(
+  apiKey: string,
+  params: EmailParams
+): Promise<boolean> {
   try {
-    // Format the conversation history as HTML
-    const conversationHtml = messages
-      .map(msg => {
-        const role = msg.isFromCustomer ? 'Customer' : 'Rylie';
-        const timestamp = new Date(msg.createdAt).toLocaleString();
-        return `
-          <div style="margin-bottom: 12px;">
-            <strong>${role}</strong> <span style="color: #888; font-size: 0.9em;">${timestamp}</span>
-            <div style="margin-left: 20px; margin-top: 4px;">${msg.content}</div>
-          </div>
-        `;
-      })
-      .join('');
-    
-    // Determine conversation status color
-    let statusColor = '#4CAF50'; // Green for active
-    if (conversation.status === 'waiting') {
-      statusColor = '#FF9800'; // Orange for waiting
-    } else if (conversation.status === 'escalated') {
-      statusColor = '#F44336'; // Red for escalated
-    } else if (conversation.status === 'completed') {
-      statusColor = '#2196F3'; // Blue for completed
+    // If no API key was provided or available, log but don't fail
+    if (!apiKey && !process.env.SENDGRID_API_KEY) {
+      console.log('No SendGrid API key available, email would have been sent to:', params.to);
+      console.log('Subject:', params.subject);
+      console.log('Content:', params.html || params.text);
+      return true;
     }
     
-    // Create email HTML with the conversation summary
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Conversation Summary: ${conversation.customerName}</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 700px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #1a237e; color: white; padding: 15px; border-radius: 5px 5px 0 0; text-align: center; }
-          .section { margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-          .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1a237e; }
-          .conversation { background-color: #f9f9f9; padding: 15px; border-radius: 5px; max-height: 500px; overflow-y: auto; }
-          .footer { font-size: 14px; color: #777; margin-top: 30px; text-align: center; }
-          .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; color: white; font-weight: bold; background-color: ${statusColor}; }
-          .customer-info { margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1 style="margin: 0;">Conversation Summary</h1>
-            <p style="margin: 5px 0 0 0;">${dealershipName}</p>
-          </div>
-          
-          <div class="section customer-info">
-            <div class="section-title">Customer Information</div>
-            <p><strong>Name:</strong> ${conversation.customerName}</p>
-            <p><strong>Phone:</strong> ${conversation.customerPhone || 'Not provided'}</p>
-            <p><strong>Email:</strong> ${conversation.customerEmail || 'Not provided'}</p>
-            <p><strong>Status:</strong> <span class="status-badge">${conversation.status.toUpperCase()}</span></p>
-            <p><strong>Started:</strong> ${new Date(conversation.createdAt).toLocaleString()}</p>
-            <p><strong>Last Update:</strong> ${new Date(conversation.updatedAt).toLocaleString()}</p>
-          </div>
-          
-          <div class="section">
-            <div class="section-title">Context Information</div>
-            <p><strong>Campaign:</strong> ${conversation.campaignContext || 'None'}</p>
-            <p><strong>Inventory Context:</strong> ${conversation.inventoryContext || 'None'}</p>
-            ${conversation.escalatedToUserId ? `<p><strong>Assigned To:</strong> User ID ${conversation.escalatedToUserId}</p>` : ''}
-          </div>
-          
-          <div class="section">
-            <div class="section-title">Conversation History (${messages.length} messages)</div>
-            <div class="conversation">
-              ${conversationHtml}
-            </div>
-          </div>
-          
-          <div class="footer">
-            <p>This conversation summary was automatically generated by Rylie AI.</p>
-            <p>To view this conversation in the dashboard, <a href="https://app.example.com/conversations/${conversation.id}">click here</a>.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    // Use the provided API key or the one from environment
+    if (apiKey && (!mailService || process.env.SENDGRID_API_KEY !== apiKey)) {
+      mailService = new MailService();
+      mailService.setApiKey(apiKey);
+    }
+    
+    if (!mailService) {
+      console.error('Mail service not initialized');
+      return false;
+    }
     
     // Send the email
-    const msg = {
-      to: toEmail,
-      from: fromEmail,
-      subject: `Conversation Summary: ${conversation.customerName} - ${dealershipName}`,
-      text: `Conversation summary for ${conversation.customerName}. Status: ${conversation.status}. ${messages.length} messages.`,
-      html: emailHtml,
-    };
+    await mailService.send({
+      to: params.to,
+      from: params.from,
+      subject: params.subject,
+      text: params.text,
+      html: params.html
+    });
     
-    await sgMail.send(msg);
     return true;
+  } catch (error) {
+    console.error('SendGrid email error:', error);
+    return false;
+  }
+}
+
+/**
+ * Send an inventory update confirmation email
+ * 
+ * @param to Recipient email address
+ * @param subject Email subject
+ * @param results Processing results to include in email
+ * @returns Success status
+ */
+export async function sendInventoryUpdateEmail(
+  to: string,
+  subject: string,
+  results: any
+): Promise<boolean> {
+  try {
+    const from = 'inventory@rylie-ai.com';
+    const html = `
+      <h2>Inventory Update Processed</h2>
+      <p>Your inventory file has been processed.</p>
+      
+      <h3>Processing Results:</h3>
+      <ul>
+        <li><strong>Total vehicles processed:</strong> ${results.totalProcessed || 0}</li>
+        <li><strong>New vehicles added:</strong> ${results.added || 0}</li>
+        <li><strong>Existing vehicles updated:</strong> ${results.updated || 0}</li>
+        ${results.errors && results.errors.length > 0 ? 
+          `<li><strong>Errors encountered:</strong> ${results.errors.length}</li>` : 
+          ''
+        }
+      </ul>
+      
+      ${results.errors && results.errors.length > 0 ? `
+        <h3>Error Details:</h3>
+        <ul>
+          ${results.errors.map((err: any) => `<li>${err}</li>`).join('')}
+        </ul>
+      ` : ''}
+      
+      <p>If you have any questions or concerns about this inventory update, please contact your Rylie AI representative.</p>
+    `;
+    
+    return await sendEmail(process.env.SENDGRID_API_KEY || '', {
+      to,
+      from,
+      subject,
+      html
+    });
+  } catch (error) {
+    console.error('Error sending inventory update email:', error);
+    return false;
+  }
+}
+
+/**
+ * Send a conversation summary email
+ * 
+ * @param to Recipient email address
+ * @param subject Email subject
+ * @param conversation Conversation data to include in summary
+ * @returns Success status
+ */
+export async function sendConversationSummary(
+  to: string,
+  subject: string,
+  conversation: any
+): Promise<boolean> {
+  try {
+    const from = 'reports@rylie-ai.com';
+    
+    // Extract conversation details
+    const customerName = conversation.customerName || 'Customer';
+    const status = conversation.status || 'active';
+    const startedAt = conversation.createdAt ? new Date(conversation.createdAt).toLocaleString() : 'Unknown';
+    const lastUpdated = conversation.updatedAt ? new Date(conversation.updatedAt).toLocaleString() : 'Unknown';
+    
+    // Format messages
+    const messagesHtml = conversation.messages && Array.isArray(conversation.messages) 
+      ? conversation.messages.map((msg: any) => `
+          <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
+            <div style="font-weight: bold;">${msg.role === 'customer' ? customerName : 'Rylie AI'}</div>
+            <div>${msg.content}</div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+              ${msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ''}
+            </div>
+          </div>
+        `).join('') 
+      : '<p>No messages in this conversation</p>';
+    
+    const html = `
+      <h2>Conversation Summary</h2>
+      <p>Here is a summary of the conversation with ${customerName}.</p>
+      
+      <h3>Conversation Details:</h3>
+      <ul>
+        <li><strong>Status:</strong> ${status}</li>
+        <li><strong>Started:</strong> ${startedAt}</li>
+        <li><strong>Last Updated:</strong> ${lastUpdated}</li>
+      </ul>
+      
+      <h3>Messages:</h3>
+      <div style="margin-top: 15px;">
+        ${messagesHtml}
+      </div>
+      
+      <p style="margin-top: 20px;">
+        To respond to this conversation, please log in to your Rylie AI dashboard.
+      </p>
+    `;
+    
+    return await sendEmail(process.env.SENDGRID_API_KEY || '', {
+      to,
+      from,
+      subject,
+      html
+    });
   } catch (error) {
     console.error('Error sending conversation summary email:', error);
     return false;
@@ -131,148 +190,90 @@ export async function sendConversationSummary({
 }
 
 /**
- * Sends the handover dossier to the specified sales representative via email
+ * Send a lead handover email
+ * 
+ * @param to Recipient email address
+ * @param subject Email subject
+ * @param handoverData Lead handover data
+ * @returns Success status
  */
-export async function sendHandoverEmail({
-  toEmail,
-  fromEmail,
-  dossier
-}: SendHandoverEmailParams): Promise<boolean> {
+export async function sendHandoverEmail(
+  to: string,
+  subject: string,
+  handoverData: any
+): Promise<boolean> {
   try {
-    // Format the conversation history as HTML
-    const conversationHtml = dossier.conversationHistory
-      .map(msg => {
-        const role = msg.role === 'customer' ? 'Customer' : 'Rylie';
-        const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
-        return `
-          <div style="margin-bottom: 12px;">
-            <strong>${role}</strong> <span style="color: #888; font-size: 0.9em;">${timestamp}</span>
-            <div style="margin-left: 20px; margin-top: 4px;">${msg.content}</div>
-          </div>
-        `;
-      })
-      .join('');
-
-    // Format the key points as HTML list
-    const keyPointsHtml = dossier.keyPoints
-      .map(point => `<li>${point}</li>`)
-      .join('');
-
-    // Format the products of interest as HTML list
-    const productsInterestedHtml = dossier.productsInterested
-      .map(product => `<li>${product}</li>`)
-      .join('');
-
-    // Format engagement tips as HTML list
-    const engagementTipsHtml = dossier.engagementTips
-      .map(tip => `<li>${tip}</li>`)
-      .join('');
-
-    // Format closing strategies as HTML list
-    const closingStrategiesHtml = dossier.closingStrategies
-      .map(strategy => `<li>${strategy}</li>`)
-      .join('');
-
-    // Create a professional-looking email template for the dossier based on the provided format
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Lead Handover: ${dossier.customerName}</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 700px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #1a237e; color: white; padding: 15px; border-radius: 5px 5px 0 0; text-align: center; }
-          .pre-header { background-color: #f5f5f5; padding: 15px; text-align: center; font-style: italic; }
-          .section { margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-          .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1a237e; }
-          .section-number { background-color: #1a237e; color: white; display: inline-block; width: 24px; height: 24px; border-radius: 50%; text-align: center; margin-right: 8px; }
-          .conversation { background-color: #f9f9f9; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; }
-          .footer { font-size: 14px; color: #777; margin-top: 30px; text-align: center; font-style: italic; }
-          ul { margin-top: 5px; }
-          .contact-detail { margin: 5px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="pre-header">
-            <p>Lead Handover Notification: Human Engagement Required</p>
-          </div>
-          
-          <div class="header">
-            <h1 style="margin: 0;">Lead Handover: ${dossier.customerName}</h1>
-            <p style="margin: 5px 0 0 0;">${dossier.dealershipName}</p>
-          </div>
-          
-          <p style="font-style: italic; text-align: center; margin: 20px 0;">
-            We have a promising lead requiring your expertise to finalize the details for a potential sale. 
-            Below you'll find comprehensive information about the lead to prepare for your interaction. 
-            Please review the details carefully to tailor your approach effectively.
-          </p>
-          
-          <div class="section">
-            <div class="section-title"><span class="section-number">1</span> Lead Identification</div>
-            <p><strong>Name:</strong> ${dossier.customerName}</p>
-            <p class="contact-detail"><strong>Contact Details:</strong> 
-              ${dossier.contactDetails.email ? `Email - ${dossier.contactDetails.email}` : ''}
-              ${dossier.contactDetails.email && dossier.contactDetails.phone ? ', ' : ''}
-              ${dossier.contactDetails.phone ? `Phone - ${dossier.contactDetails.phone}` : ''}
-            </p>
-            <p><strong>Products Interested In:</strong></p>
-            <ul>${productsInterestedHtml}</ul>
-            <p><strong>Likely Purchase Date/Timeline:</strong> ${dossier.purchaseTimeline}</p>
-          </div>
-          
-          <div class="section">
-            <div class="section-title"><span class="section-number">2</span> Conversation Summary</div>
-            <p><strong>Key Points:</strong></p>
-            <ul>${keyPointsHtml}</ul>
-            <p><strong>Lead's Intent:</strong> ${dossier.leadIntent}</p>
-          </div>
-          
-          <div class="section">
-            <div class="section-title"><span class="section-number">3</span> Relationship Building Information</div>
-            <p><strong>Personal Insights:</strong> ${dossier.personalInsights}</p>
-            <p><strong>Communication Style:</strong> ${dossier.communicationStyle}</p>
-          </div>
-          
-          <div class="section">
-            <div class="section-title"><span class="section-number">4</span> Sales Strategies</div>
-            <p><strong>Engagement Tips:</strong></p>
-            <ul>${engagementTipsHtml}</ul>
-            <p><strong>Closing Strategies:</strong></p>
-            <ul>${closingStrategiesHtml}</ul>
-          </div>
-          
-          <div class="section">
-            <div class="section-title">Conversation History</div>
-            <div class="conversation">
-              ${conversationHtml}
+    const from = 'leads@rylie-ai.com';
+    
+    // Extract handover details
+    const customerName = handoverData.customerName || 'Customer';
+    const contactInfo = handoverData.contactInfo || 'Not provided';
+    const reason = handoverData.reason || 'Manual handover';
+    const handoverDate = new Date().toLocaleString();
+    
+    // Format messages
+    const messagesHtml = handoverData.messages && Array.isArray(handoverData.messages) 
+      ? handoverData.messages.map((msg: any) => `
+          <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
+            <div style="font-weight: bold;">${msg.role === 'customer' ? customerName : 'Rylie AI'}</div>
+            <div>${msg.content}</div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+              ${msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ''}
             </div>
           </div>
-          
-          <div class="footer">
-            <p>Your adept skills in managing client relations and closing deals can undoubtedly make a significant difference here. Wishing you the best in this engagement!</p>
-          </div>
-        </div>
-      </body>
-      </html>
+        `).join('') 
+      : '<p>No messages in this conversation</p>';
+    
+    // Format vehicle interest
+    const vehicleHtml = handoverData.vehicle 
+      ? `
+        <h3>Vehicle of Interest:</h3>
+        <ul>
+          <li><strong>Year:</strong> ${handoverData.vehicle.year || 'Unknown'}</li>
+          <li><strong>Make:</strong> ${handoverData.vehicle.make || 'Unknown'}</li>
+          <li><strong>Model:</strong> ${handoverData.vehicle.model || 'Unknown'}</li>
+          <li><strong>Trim:</strong> ${handoverData.vehicle.trim || 'Unknown'}</li>
+          <li><strong>Price:</strong> $${handoverData.vehicle.price || 'Unknown'}</li>
+          <li><strong>VIN:</strong> ${handoverData.vehicle.vin || 'Unknown'}</li>
+        </ul>
+      `
+      : '';
+    
+    const html = `
+      <h2>Lead Handover: ${customerName}</h2>
+      <p>A conversation has been escalated to you for follow-up.</p>
+      
+      <h3>Lead Details:</h3>
+      <ul>
+        <li><strong>Customer:</strong> ${customerName}</li>
+        <li><strong>Contact Info:</strong> ${contactInfo}</li>
+        <li><strong>Handover Reason:</strong> ${reason}</li>
+        <li><strong>Handover Date:</strong> ${handoverDate}</li>
+      </ul>
+      
+      ${vehicleHtml}
+      
+      <h3>Conversation History:</h3>
+      <div style="margin-top: 15px;">
+        ${messagesHtml}
+      </div>
+      
+      <h3>Recommended Approach:</h3>
+      <p>${handoverData.recommendedApproach || 'Follow up with the customer to address their needs and questions.'}</p>
+      
+      <p style="margin-top: 20px;">
+        To respond to this lead, please contact the customer directly or log in to your Rylie AI dashboard.
+      </p>
     `;
-
-    // Send the email with the dossier
-    const msg = {
-      to: toEmail,
-      from: fromEmail,
-      subject: `Lead Handover: ${dossier.customerName} - ${dossier.dealershipName}`,
-      text: `Lead handover for ${dossier.customerName} from ${dossier.dealershipName}. Please view in HTML format for a better experience.`,
-      html: emailHtml,
-    };
-
-    await sgMail.send(msg);
-    return true;
+    
+    return await sendEmail(process.env.SENDGRID_API_KEY || '', {
+      to,
+      from,
+      subject,
+      html
+    });
   } catch (error) {
-    console.error('Error sending handover email:', error);
+    console.error('Error sending lead handover email:', error);
     return false;
   }
 }

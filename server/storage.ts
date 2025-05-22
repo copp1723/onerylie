@@ -14,8 +14,8 @@ import { randomBytes, createHash } from "crypto";
 // Interface for all storage operations
 export interface IStorage {
   // User operations
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: Partial<InsertUser>): Promise<User>;
   createUser(user: InsertUser): Promise<User>;
   
   // Dealership operations
