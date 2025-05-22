@@ -85,6 +85,8 @@ export default function AdvancedPromptTesting() {
   const [response, setResponse] = useState("");
   const [showJson, setShowJson] = useState(false);
   const [error, setError] = useState("");
+  const [isHandoverLoading, setIsHandoverLoading] = useState(false);
+  const [handoverDossier, setHandoverDossier] = useState<any>(null);
   
   // Communication channel
   const [channel, setChannel] = useState<string>("sms");
@@ -241,6 +243,54 @@ export default function AdvancedPromptTesting() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
+  
+  const handleHandover = async () => {
+    if (conversationHistory.length === 0) {
+      setError("You need to have a conversation before generating a handover dossier.");
+      return;
+    }
+    
+    setIsHandoverLoading(true);
+    setError("");
+    
+    // Prepare the request payload
+    const payload = {
+      systemPrompt,
+      channel,
+      customerInfo,
+      dealershipContext,
+      conversationHistory: includeHistory ? conversationHistory : [],
+      relevantVehicles: includeVehicles ? vehicles : [],
+      formatOptions: {
+        ...formatOptions,
+        generateHandoverDossier: true
+      }
+    };
+    
+    try {
+      const result = await fetch('/api/prompt-test/handover', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!result.ok) {
+        throw new Error(`Error: ${result.status}`);
+      }
+      
+      const data = await result.json();
+      setHandoverDossier(data.handoverDossier);
+      setResponse(JSON.stringify(data, null, 2));
+      setShowJson(true);
+    } catch (err) {
+      console.error('Error generating handover:', err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setIsHandoverLoading(false);
+    }
+  };
 
   return (
     <div className="container mx-auto py-6">
@@ -299,21 +349,40 @@ export default function AdvancedPromptTesting() {
                       placeholder="Enter a customer message to test..."
                     />
                   </div>
-                  <Button 
-                    type="button" 
-                    className="w-full"
-                    onClick={handleSubmit}
-                    disabled={isLoading || !customerMessage}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                        Processing...
-                      </>
-                    ) : (
-                      "Test Prompt"
-                    )}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      className="flex-1"
+                      onClick={handleSubmit}
+                      disabled={isLoading || !customerMessage}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                          Processing...
+                        </>
+                      ) : (
+                        "Test Prompt"
+                      )}
+                    </Button>
+                    
+                    <Button 
+                      type="button"
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                      onClick={handleHandover}
+                      disabled={isHandoverLoading || conversationHistory.length === 0}
+                    >
+                      {isHandoverLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                        </svg>
+                      )}
+                      Handover
+                    </Button>
+                  </div>
                   {error && (
                     <div className="text-destructive text-sm mt-2">{error}</div>
                   )}
@@ -390,6 +459,92 @@ export default function AdvancedPromptTesting() {
                         <Copy className="h-3 w-3 mr-1" /> Copy Message
                       </Button>
                     </div>
+                    
+                    {handoverDossier && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 rounded-md p-4 border-l-4 border-amber-400 dark:border-amber-600 mb-4">
+                        <h3 className="font-medium mb-2 text-amber-800 dark:text-amber-200">Lead Handover Dossier:</h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <p className="font-semibold">Customer Name:</p>
+                              <p>{handoverDossier.customerName || 'Unknown'}</p>
+                            </div>
+                            <div>
+                              <p className="font-semibold">Contact:</p>
+                              <p>{handoverDossier.customerContact || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <p className="font-semibold">Urgency:</p>
+                              <p className={`capitalize ${
+                                handoverDossier.urgency === 'high' ? 'text-red-600 dark:text-red-400 font-medium' : 
+                                handoverDossier.urgency === 'medium' ? 'text-amber-600 dark:text-amber-400' : 
+                                'text-green-600 dark:text-green-400'
+                              }`}>
+                                {handoverDossier.urgency || 'Low'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="font-semibold">Escalation Reason:</p>
+                              <p>{handoverDossier.escalationReason || 'Not specified'}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3">
+                            <p className="font-semibold">Conversation Summary:</p>
+                            <p className="text-muted-foreground">{handoverDossier.conversationSummary}</p>
+                          </div>
+                          
+                          {handoverDossier.customerInsights && handoverDossier.customerInsights.length > 0 && (
+                            <div className="mt-3">
+                              <p className="font-semibold">Customer Insights:</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
+                                {handoverDossier.customerInsights.map((insight, idx) => (
+                                  <div key={idx} className="flex justify-between">
+                                    <span>{insight.key}:</span>
+                                    <span className="font-medium">{insight.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {handoverDossier.vehicleInterests && handoverDossier.vehicleInterests.length > 0 && (
+                            <div className="mt-3">
+                              <p className="font-semibold">Vehicle Interests:</p>
+                              <div className="space-y-2 mt-1">
+                                {handoverDossier.vehicleInterests.map((vehicle, idx) => (
+                                  <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
+                                    {vehicle.year && vehicle.make && vehicle.model ? (
+                                      <p className="font-medium">{vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim || ''}</p>
+                                    ) : (
+                                      <p className="font-medium">Vehicle details incomplete</p>
+                                    )}
+                                    {vehicle.vin && <p className="text-muted-foreground">VIN: {vehicle.vin}</p>}
+                                    <div className="flex items-center mt-1">
+                                      <span className="text-muted-foreground mr-1">Confidence:</span>
+                                      <div className="h-1.5 w-24 bg-gray-200 dark:bg-gray-700 rounded-full">
+                                        <div 
+                                          className="h-full bg-amber-500 rounded-full" 
+                                          style={{ width: `${Math.min(100, vehicle.confidence * 100)}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="ml-1 text-xs text-muted-foreground">
+                                        {Math.round(vehicle.confidence * 100)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="mt-3">
+                            <p className="font-semibold">Suggested Approach:</p>
+                            <p className="text-muted-foreground whitespace-pre-line">{handoverDossier.suggestedApproach}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="rounded-md p-4 border border-muted">
                       <h3 className="font-medium mb-2">Response Analysis:</h3>
