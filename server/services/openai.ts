@@ -28,13 +28,29 @@ export interface ConversationContext {
 
 // Type for handover dossier
 export interface HandoverDossier {
+  // Lead Identification
   customerName: string;
+  contactDetails: {
+    email?: string;
+    phone?: string;
+  };
+  productsInterested: string[];
+  purchaseTimeline: string;
   dealershipName: string;
-  customerPersonality: string;
-  customerPriorities: string[];
-  vehicleInterests: string[];
-  conversationSummary: string;
-  suggestedApproach: string;
+  
+  // Conversation Summary
+  keyPoints: string[];
+  leadIntent: string;
+  
+  // Relationship Building Information
+  personalInsights: string;
+  communicationStyle: string;
+  
+  // Sales Strategies
+  engagementTips: string[];
+  closingStrategies: string[];
+  
+  // Full conversation history for reference
   conversationHistory: {
     role: "customer" | "assistant";
     content: string;
@@ -123,20 +139,27 @@ export async function generateHandoverDossier(
     });
     
     const prompt = `
-Based on the conversation history, create a comprehensive handover dossier for a sales representative who will take over this conversation. 
-The goal is to provide enough context so they can quickly understand the customer's needs, personality, and interests.
+**SYSTEM INSTRUCTION: LEAD HANDOVER**
 
-DOSSIER FORMAT:
-Return a JSON object with the following fields:
-- customerName: The customer's name
-- dealershipName: The dealership name
-- customerPersonality: A brief description of the customer's personality traits, communication style, and current mood
-- customerPriorities: An array of what seems important to this customer (features, concerns, etc.)
-- vehicleInterests: An array of vehicles or vehicle types the customer has expressed interest in
-- conversationSummary: A concise summary of the conversation so far
-- suggestedApproach: Recommended strategy for the sales rep to continue the conversation
+When a lead is determined to be ready for handover to a human dealership representative, generate a detailed, professional summary that prepares the salesperson to effectively engage and close the opportunity. Follow the outline below and fill in each section using the complete conversation history, customer-provided context, and any relevant background data.
 
-FORMAT EXACTLY AS REQUESTED WITH ALL FIELDS. This is a critical sales handover document.
+**FORMAT THE HANDOVER AS A JSON OBJECT WITH THE FOLLOWING STRUCTURE:**
+
+Return a JSON object with these fields:
+- customerName: The customer's full name
+- contactDetails: An object with email and phone (if available)
+- productsInterested: Array of products/vehicles the lead is seeking
+- purchaseTimeline: Any timing/urgency cues provided by the lead
+- dealershipName: Name of the dealership
+- keyPoints: Array of concise bullet points summarizing the lead's needs, pain points, and context
+- leadIntent: The specific outcome the lead is seeking (e.g., "seeking immediate financing for a new car")
+- personalInsights: Any personal, situational, or emotional factors relevant to building rapport
+- communicationStyle: Description of how the lead prefers to communicate
+- engagementTips: Array of recommendations for how to approach the lead
+- closingStrategies: Array of suggested effective strategies for progressing the sale
+
+Be clear, professional, and empathetic. Only include facts shared or inferred from the conversation—do not fabricate details. 
+Do not include pricing or financing offers; defer those to the dealership rep.
 `;
     
     // Vehicle information if available
@@ -164,7 +187,7 @@ FORMAT EXACTLY AS REQUESTED WITH ALL FIELDS. This is a critical sales handover d
       model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       messages: messages as any,
       response_format: { type: "json_object" },
-      temperature: 0.5,
+      temperature: 0.7,
       max_tokens: 2000,
     });
     
@@ -182,12 +205,19 @@ FORMAT EXACTLY AS REQUESTED WITH ALL FIELDS. This is a critical sales handover d
     // Return a basic dossier if we encounter an error
     return {
       customerName: context.customerName,
+      contactDetails: {
+        email: "",
+        phone: ""
+      },
+      productsInterested: ["Unable to determine"],
+      purchaseTimeline: "Unable to determine",
       dealershipName: context.dealershipName,
-      customerPersonality: "Unable to analyze",
-      customerPriorities: ["Unable to determine"],
-      vehicleInterests: ["Unable to determine"],
-      conversationSummary: "Error generating summary",
-      suggestedApproach: "Review the conversation history and contact the customer promptly",
+      keyPoints: ["Error generating key points"],
+      leadIntent: "Error determining lead intent",
+      personalInsights: "Unable to analyze",
+      communicationStyle: "Unable to determine",
+      engagementTips: ["Review the conversation history", "Contact customer promptly"],
+      closingStrategies: ["Address customer needs directly", "Provide personalized assistance"],
       conversationHistory: context.previousMessages.concat([{
         role: "customer",
         content: lastCustomerMessage
