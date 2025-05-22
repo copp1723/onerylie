@@ -3,7 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
-import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments } from "./services/openai";
+import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments, type HandoverDossier } from "./services/openai";
+import { sendHandoverEmail } from "./services/email";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
@@ -242,8 +243,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         relevantVehicles
       };
 
-      // Generate AI response
-      const { response, shouldEscalate, reason } = await generateResponse(
+      // Generate AI response with potential handover dossier
+      const { response, shouldEscalate, reason, handoverDossier } = await generateResponse(
         customerMessage,
         context,
         persona.promptTemplate,
@@ -261,6 +262,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update conversation status if needed
       if (shouldEscalate) {
         await storage.updateConversationStatus(conversation.id, 'escalated');
+        
+        // Handle the handover process with email if configured
+        if (handoverDossier && persona.arguments && persona.arguments.handoverEmail) {
+          try {
+            // Send the handover dossier to the configured email
+            await sendHandoverEmail({
+              toEmail: persona.arguments.handoverEmail as string,
+              fromEmail: `rylie@${dealership.domain || 'rylie-ai.com'}`,
+              dossier: handoverDossier
+            });
+            
+            console.log(`Handover dossier sent to ${persona.arguments.handoverEmail} for conversation ${conversation.id}`);
+          } catch (emailError) {
+            console.error('Error sending handover email:', emailError);
+          }
+        }
       }
 
       // Return the response
@@ -317,13 +334,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         previousMessages,
       };
 
-      // Generate AI response
-      const { response, shouldEscalate, reason } = await generateResponse(
+      // Generate AI response with potential handover dossier
+      const { response, shouldEscalate, reason, handoverDossier } = await generateResponse(
         message,
         context,
         persona.promptTemplate,
         persona.arguments as PersonaArguments
       );
+
+      // Handle the handover process with email if configured and if should escalate
+      if (shouldEscalate && handoverDossier && persona.arguments && persona.arguments.handoverEmail) {
+        try {
+          // Send the handover dossier to the configured email
+          await sendHandoverEmail({
+            toEmail: persona.arguments.handoverEmail as string,
+            fromEmail: `rylie@${dealership.domain || 'rylie-ai.com'}`,
+            dossier: handoverDossier
+          });
+          
+          console.log(`Handover dossier sent to ${persona.arguments.handoverEmail} for conversation ${conversationId}`);
+        } catch (emailError) {
+          console.error('Error sending handover email:', emailError);
+        }
+      }
 
       // Return the response without storing it
       return res.json({
