@@ -250,4 +250,231 @@ router.post('/test', async (req, res) => {
   }
 });
 
+// Create a unified schema for the prompt test request with persona arguments
+const unifiedPromptTestSchema = z.object({
+  customerMessage: z.string().optional(),
+  promptTemplate: z.string().min(1, "Prompt template is required"),
+  personaArguments: z.record(z.any()).optional(),
+  previousMessages: z.array(z.object({
+    role: z.enum(["customer", "assistant"]),
+    content: z.string()
+  })).optional().default([]),
+  reason: z.string().optional()
+});
+
+// Handle simpler prompt testing with persona arguments
+router.post('/', async (req, res) => {
+  try {
+    // Validate request body
+    const validation = unifiedPromptTestSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Invalid request',
+        details: validation.error.format()
+      });
+    }
+
+    const data = validation.data;
+    
+    // Apply template variables from persona arguments
+    const processedPromptTemplate = data.personaArguments 
+      ? Object.entries(data.personaArguments).reduce((template, [key, value]) => {
+          return template.replace(new RegExp(`{{${key}}}`, 'g'), value as string);
+        }, data.promptTemplate)
+      : data.promptTemplate;
+    
+    // Prepare conversation history
+    let messages = [
+      {
+        role: "system",
+        content: processedPromptTemplate
+      }
+    ];
+    
+    // Add conversation history if provided
+    if (data.previousMessages && data.previousMessages.length > 0) {
+      messages = [
+        ...messages,
+        ...data.previousMessages.map(msg => ({
+          role: msg.role === 'customer' ? 'user' : 'assistant',
+          content: msg.content
+        }))
+      ];
+    }
+    
+    // Add the customer message if provided
+    if (data.customerMessage) {
+      messages.push({
+        role: "user",
+        content: data.customerMessage
+      });
+    }
+
+    // Call OpenAI with the processed messages
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+      messages: messages as any,
+      temperature: 0.7,
+      max_tokens: 1500
+    });
+
+    // Extract the response text
+    const responseText = completion.choices[0]?.message?.content || "No response generated";
+    
+    // Try to parse as JSON if response looks like JSON
+    let jsonResponse = null;
+    let channelType = "text"; // default
+    
+    if (responseText.trim().startsWith("{") && responseText.trim().endsWith("}")) {
+      try {
+        const parsed = JSON.parse(responseText);
+        jsonResponse = parsed;
+        
+        // Extract channel type if available
+        if (parsed.type) {
+          channelType = parsed.type;
+        }
+        
+        // Use the 'answer' field as the actual response if available
+        if (parsed.answer) {
+          return res.json({
+            response: parsed.answer,
+            shouldEscalate: false,
+            jsonResponse: parsed,
+            channelType
+          });
+        }
+      } catch (e) {
+        // Not valid JSON, ignore and return the raw text
+      }
+    }
+    
+    // Return the response
+    return res.json({
+      response: responseText,
+      shouldEscalate: false,
+      jsonResponse,
+      channelType
+    });
+  } catch (error: any) {
+    console.error('Error testing prompt:', error);
+    
+    return res.status(500).json({ 
+      error: 'Error processing request',
+      message: error.message
+    });
+  }
+});
+
+// Handover endpoint for generating and returning a lead handover dossier
+router.post('/handover', async (req, res) => {
+  try {
+    // Validate request body
+    const validation = unifiedPromptTestSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Invalid request',
+        details: validation.error.format()
+      });
+    }
+
+    const data = validation.data;
+    
+    // Check if we have conversation history
+    if (!data.previousMessages || data.previousMessages.length === 0) {
+      return res.status(400).json({
+        error: 'Cannot create handover without conversation history'
+      });
+    }
+    
+    // Import the handover service for generating a proper dossier
+    const { createHandoverDossier } = await import('../services/handover');
+    
+    // Create a mock conversation and dealership for testing purposes
+    const mockConversationId = Math.floor(Math.random() * 10000);
+    const mockDealershipId = 1;
+    
+    // Extract customer name from conversation if possible
+    let customerName = "Test Customer";
+    const personaArgs = data.personaArguments || {};
+    
+    // Create the handover dossier
+    const dossier = await createHandoverDossier({
+      conversationId: mockConversationId,
+      dealershipId: mockDealershipId,
+      customerName,
+      customerContact: "test@example.com",
+      escalationReason: data.reason || "Requested via testing interface"
+    });
+    
+    // Format the conversation history properly
+    const formattedHistory = data.previousMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: new Date()
+    }));
+    
+    // Use our AI to analyze the conversation specifically for the dossier
+    const systemPrompt = `
+    You are an AI assistant analyzing a conversation between a customer and a dealership representative.
+    Based on the conversation, please extract the following in JSON format:
+    1. A brief summary of the conversation (1-2 paragraphs)
+    2. Key customer insights (what are they looking for, budget, timeline, etc.)
+    3. Vehicle interests (make, model, year preferences)
+    4. A suggested approach for the sales representative
+    5. The urgency level (low, medium, high)
+    
+    Return as JSON only.
+    `;
+    
+    // Call OpenAI with the processed messages for analysis
+    const analysisMessages = [
+      { role: "system", content: systemPrompt },
+      ...data.previousMessages.map(msg => ({
+        role: msg.role === "customer" ? "user" : "assistant",
+        content: msg.content
+      }))
+    ];
+    
+    const analysis = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+      messages: analysisMessages as any,
+      temperature: 0.7,
+      max_tokens: 1000,
+      response_format: { type: "json_object" }
+    });
+    
+    // Parse the analysis results
+    let analysisResults = {};
+    try {
+      analysisResults = JSON.parse(analysis.choices[0]?.message?.content || "{}");
+    } catch (e) {
+      console.error("Error parsing analysis results", e);
+    }
+    
+    // Return both the dossier and the analysis
+    return res.json({
+      dossier: {
+        id: dossier.id,
+        customerName: dossier.customerName,
+        conversationSummary: dossier.conversationSummary,
+        customerInsights: dossier.customerInsights,
+        vehicleInterests: dossier.vehicleInterests,
+        suggestedApproach: dossier.suggestedApproach,
+        urgency: dossier.urgency
+      },
+      analysis: analysisResults,
+      success: true,
+      message: "Handover dossier generated successfully"
+    });
+  } catch (error: any) {
+    console.error('Error generating handover dossier:', error);
+    
+    return res.status(500).json({ 
+      error: 'Error generating handover dossier',
+      message: error.message
+    });
+  }
+});
+
 export default router;

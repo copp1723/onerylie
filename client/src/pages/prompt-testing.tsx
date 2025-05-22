@@ -245,6 +245,9 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
         }
       });
       
+      // Reset any previous handover results when sending a new message
+      setHandoverResult(null);
+      
       // Parse JSON response
       const data = await response.json();
       return data as PromptTestResponse & { 
@@ -272,6 +275,44 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
       
       // Clear the customer message input
       setCustomerMessage("");
+    }
+  });
+  
+  // Mutation for handling lead handover
+  const [handoverResult, setHandoverResult] = useState<any>(null);
+  
+  const handoverMutation = useMutation({
+    mutationFn: async () => {
+      // First, create a conversation if we don't have one
+      if (conversationHistory.length === 0) {
+        throw new Error("Cannot create handover dossier without a conversation");
+      }
+      
+      const response = await apiRequest('/api/prompt-test/handover', {
+        method: 'POST',
+        data: {
+          promptTemplate,
+          personaArguments,
+          previousMessages: conversationHistory,
+          reason: "Test handover requested via testing interface"
+        }
+      });
+      
+      const data = await response.json();
+      return data;
+    },
+    onSuccess: (data) => {
+      // Store the handover result
+      setHandoverResult(data);
+      
+      // Add a system message to the conversation history
+      setConversationHistory([
+        ...conversationHistory,
+        { 
+          role: "assistant", 
+          content: "🔄 Conversation has been escalated to human support. A comprehensive lead handover dossier has been generated." 
+        }
+      ]);
     }
   });
 
@@ -577,6 +618,18 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : null}
                     Send
+                  </Button>
+                  
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => handoverMutation.mutate()}
+                    disabled={handoverMutation.isPending || conversationHistory.length === 0}
+                  >
+                    {handoverMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    Handover
                   </Button>
                 </div>
                 
