@@ -1,0 +1,61 @@
+Dev Ticket — Guarantee Paragraph Breaks in Assistant Replies
+
+Field	Details
+Title	Force blank-line paragraph spacing for every outbound assistant message
+ID	UI-CHAT-016
+Priority	P2 – UX polish
+Severity	Moderate (readability)
+Owner	frontend-web squad (needs 1-line backend tweak)
+Date Opened	2025-05-22
+Tags	chat-formatting, prompt-engine, whitespace
+
+
+⸻
+
+What Happened
+	•	After switching chat bubble CSS to white-space: pre-line, the first assistant message renders with proper blank lines, but subsequent messages come through as a single block.
+	•	Network payload shows those later messages have no \n characters between sentences, so the UI can’t create the spacing.
+
+⸻
+
+Root Cause
+
+We’re asking the LLM for prose but we never instruct it to add blank lines. Its default style varies turn-to-turn, so some replies happen to include \n\n, others don’t.
+
+⸻
+
+Fix Options
+
+#	Layer	Task	Effort	Notes
+A	Prompt	Add a single instruction to the system prompt for every Rylie persona:  “Write in paragraphs separated by a blank line (\\n\\n).”	2 min	Fastest, zero code.
+B	Backend	Post-process assistantMessage.content right before emitting to UI:content = content.replace(/\\s*([.!?])\\s+/g, '$1  \\n\\n');	15 min	Guarantees at least one blank line after each sentence.
+C	Frontend	Smart renderer that inserts blank line whenever sentence length > 90 chars.	30 min	Overkill, brittle.
+
+Recommendation: Option A (prompt tweak). Keep Option B as fallback if marketing later removes style rules from prompts.
+
+⸻
+
+Implementation Steps (Option A)
+	1.	Open promptTemplates/rylie.base.txt (and any variants).
+	2.	Append to system section:
+Format replies in short paragraphs, using two newline characters between paragraphs.
+	3.	Redeploy prompt config.
+
+⸻
+
+Acceptance Criteria
+	•	Every assistant reply in the Prompt-Test UI shows blank-line separation—no wall-of-text messages.
+	•	No regression in link formatting or HTML escaping.
+	•	QA verifies with at least three different prompts (“trade-in”, “shipping”, “financing”).
+
+⸻
+
+Risk
+
+Low; prompt wording change only affects style, not substance.
+
+⸻
+
+Roll-back Plan
+
+Simply remove the line from the prompt if newlines cause unwanted extra space in downstream channels (SMS, etc.).

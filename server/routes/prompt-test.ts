@@ -140,6 +140,9 @@ router.post('/', async (req: Request, res: Response) => {
     if (personaArguments?.financeApplicationUrl) {
       processedPrompt += `\n\nFINANCE APPLICATION URL: ${personaArguments.financeApplicationUrl}`;
     }
+    
+    // Add formatting instructions to ensure consistent paragraph breaks
+    processedPrompt += `\n\nFORMATTING: Format replies in short paragraphs, using two newline characters (\\n\\n) between paragraphs.`;
 
     // Start timing
     const startTime = Date.now();
