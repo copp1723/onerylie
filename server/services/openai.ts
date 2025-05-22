@@ -63,7 +63,7 @@ export async function generateResponse(
   customerMessage: string,
   context: ConversationContext,
   personaTemplate: string,
-  personaArguments: PersonaArguments
+  personaArguments?: PersonaArguments
 ): Promise<{ response: string; shouldEscalate: boolean; reason?: string; handoverDossier?: HandoverDossier }> {
   try {
     // Build the complete system prompt with persona configuration
@@ -229,9 +229,11 @@ Do not include pricing or financing offers; defer those to the dealership rep.
 // Helper function to build the complete system prompt
 function buildSystemPrompt(
   personaTemplate: string,
-  personaArguments: PersonaArguments,
+  personaArguments: PersonaArguments | undefined,
   context: ConversationContext
 ): string {
+  // Ensure personaArguments is not undefined
+  personaArguments = personaArguments || {};
   // Vehicle information formatting
   let vehicleInfo = "";
   if (context.relevantVehicles && context.relevantVehicles.length > 0) {
