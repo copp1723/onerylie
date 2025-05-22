@@ -15,6 +15,7 @@ import reportApiRoutes from "./routes/report-api";
 import abtestRoutes from "./routes/abtest-routes";
 import personaRoutes from "./routes/persona-routes";
 import inventoryRoutes from "./routes/inventory-routes";
+import promptTestRoutes from "./routes/prompt-test";
 import { log } from "./vite";
 
 // Define validation schemas
