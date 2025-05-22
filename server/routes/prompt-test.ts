@@ -69,7 +69,8 @@ router.post('/', async (req: Request, res: Response) => {
       customerName: 'Test Customer',
       dealershipName: personaArguments?.dealershipName || 'Test Dealership',
       previousMessages: previousMessages || [],
-      relevantVehicles: [] // No specific vehicles in this test
+      relevantVehicles: [], // No specific vehicles in this test
+      personaArguments: personaArguments || {} // Pass persona arguments to the OpenAI service
     };
 
     // Generate AI response
