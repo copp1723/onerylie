@@ -11,7 +11,7 @@ import Inventory from "@/pages/inventory";
 import Personas from "@/pages/personas";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
-import PromptTesting from "@/pages/prompt-testing";
+import ProtectedPromptTesting from "@/pages/protected-prompt-testing";
 
 function Router() {
   return (
@@ -22,7 +22,7 @@ function Router() {
       <Route path="/personas" component={Personas} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />
-      <Route path="/prompt-testing" component={PromptTesting} />
+      <Route path="/prompt-testing" component={ProtectedPromptTesting} />
       <Route component={NotFound} />
     </Switch>
   );

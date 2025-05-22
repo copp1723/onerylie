@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { Spinner } from './ui/spinner';
+import { Loader2 } from 'lucide-react';
 import { AuthButtons } from './AuthButtons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -14,7 +14,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isLoading) {
     return (
       <div className="flex h-[70vh] w-full items-center justify-center">
-        <Spinner size="lg" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
