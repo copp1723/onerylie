@@ -29,6 +29,8 @@ export const dealerships = pgTable("dealerships", {
   location: text("location").notNull(),
   contactEmail: text("contact_email").notNull(),
   contactPhone: text("contact_phone").notNull(),
+  domain: text("domain"),
+  handoverEmail: text("handover_email"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -37,6 +39,8 @@ export const insertDealershipSchema = createInsertSchema(dealerships).pick({
   location: true,
   contactEmail: true,
   contactPhone: true,
+  domain: true,
+  handoverEmail: true,
 });
 
 // Vehicle inventory schema

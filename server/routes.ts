@@ -5,10 +5,12 @@ import { z } from "zod";
 import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments, type HandoverDossier } from "./services/openai";
 import { sendHandoverEmail, sendConversationSummary } from "./services/email";
+import { processScheduledReports } from "./services/scheduler";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
+import emailReportRoutes from "./routes/email-reports";
 
 // Define validation schemas
 const inboundMessageSchema = z.object({
@@ -87,6 +89,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create HTTP server
   const httpServer = createServer(app);
+  
+  // Register email report routes
+  app.use('/api/dealerships', emailReportRoutes);
 
   // Authentication routes
   app.post('/api/auth/login', async (req, res) => {
