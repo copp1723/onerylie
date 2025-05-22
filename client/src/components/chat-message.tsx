@@ -9,32 +9,31 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message, isCustomer }: ChatMessageProps) {
   // Process the message to extract and format URLs nicely
-  const formatMessage = (text: string) => {
-    if (isCustomer) return text; // Only process AI responses
+  const formatMessage = (text: string): { paragraphs: string[] } => {
+    if (isCustomer) return { paragraphs: [text] }; // Only process AI responses
     
-    // Replace markdown-style links with actual links
-    const markdownLinkRegex = /\[(.*?)\]\((https?:\/\/[^\s]+)\)/g;
-    const markdownReplaced = text.replace(markdownLinkRegex, (_, text, url) => {
-      return `<a href="${url}" class="text-primary hover:underline" target="_blank">${url}</a>`;
-    });
+    // Find and process URLs to remove descriptive text
+    const processText = (inputText: string): string => {
+      // Replace text like "Trade-In Valuation Tool: URL" with just the URL
+      const labeledUrlRegex = /(.*?)(?:trade-in valuation tool|trade-in tool|finance application|finance app|application):\s*(https?:\/\/[^\s]+)/gi;
+      return inputText.replace(labeledUrlRegex, (_, prefix, url) => {
+        return `${prefix.trim()} ${url}`;
+      });
+    };
     
-    // Also catch plain URLs
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const urlsReplaced = markdownReplaced.replace(urlRegex, (url) => {
-      // Skip if already wrapped in an <a> tag
-      if (url.startsWith('<a ')) return url;
-      return `<a href="${url}" class="text-primary hover:underline" target="_blank">${url}</a>`;
-    });
+    // Process the text to clean it up
+    const cleanedText = processText(text);
     
-    // Replace text like "Trade-In Valuation Tool: URL" with just the URL link
-    const labeledUrlRegex = /(.*?)(?:trade-in valuation tool|trade-in tool|finance application|finance app|application):\s*(https?:\/\/[^\s]+)/gi;
-    const cleanedText = urlsReplaced.replace(labeledUrlRegex, (_, prefix, url) => {
-      return `${prefix}<a href="${url}" class="text-primary hover:underline" target="_blank">${url}</a>`;
-    });
-    
-    // Add paragraph breaks
+    // Split text by paragraph breaks and clean each paragraph
     const paragraphs = cleanedText.split('\n\n');
-    return paragraphs.map(p => p.trim()).filter(p => p.length > 0).join('</p><p>');
+    const formattedParagraphs = paragraphs
+      .map((p: string) => p.trim())
+      .filter((p: string) => p.length > 0);
+    
+    // Return paragraphs for rendering
+    return {
+      paragraphs: formattedParagraphs
+    };
   };
 
   return (
@@ -62,11 +61,16 @@ export function ChatMessage({ message, isCustomer }: ChatMessageProps) {
         {isCustomer ? (
           <div className="whitespace-pre-wrap text-sm">{message}</div>
         ) : (
-          <div className="text-sm space-y-3">
-            {formatMessage(message).split('</p><p>').map((paragraph, i) => (
-              <p key={i} 
-                 className="leading-relaxed" 
-                 dangerouslySetInnerHTML={{ __html: paragraph }} />
+          <div className="text-sm space-y-4">
+            {formatMessage(message).paragraphs.map((paragraph, i) => (
+              <p key={i} className="leading-relaxed">
+                {paragraph.split('\n').map((line, j) => (
+                  <span key={j}>
+                    {line}
+                    {j < paragraph.split('\n').length - 1 && <br />}
+                  </span>
+                ))}
+              </p>
             ))}
           </div>
         )}
