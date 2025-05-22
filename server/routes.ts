@@ -11,6 +11,8 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import emailReportRoutes from "./routes/email-reports";
+import apiReportTriggerRoutes from "./routes/api-report-trigger";
+import { log } from "./vite";
 
 // Define validation schemas
 const inboundMessageSchema = z.object({
@@ -92,6 +94,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register email report routes
   app.use('/api/dealerships', emailReportRoutes);
+  
+  // Register report trigger route
+  app.use('/api', apiReportTriggerRoutes);
+  
+  // Set up scheduled task to process email reports
+  // In a production environment, this would be handled by a proper scheduler
+  // For this demo, we'll check every minute if any reports are due
+  setInterval(async () => {
+    try {
+      await processScheduledReports();
+      log('Processed scheduled reports', 'scheduler');
+    } catch (error) {
+      console.error('Error processing scheduled reports:', error);
+    }
+  }, 60 * 1000); // Check every minute
 
   // Authentication routes
   app.post('/api/auth/login', async (req, res) => {
