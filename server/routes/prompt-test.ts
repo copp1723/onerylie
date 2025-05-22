@@ -405,27 +405,98 @@ router.post('/handover', async (req, res) => {
       timestamp: new Date()
     }));
     
-    // Create a mock dossier directly
+    // Generate a summary from the conversation history
+    let extractedSummary = "No conversation to summarize.";
+    let extractedInsights = [];
+    let extractedVehicleInterests = [];
+    let suggestedApproach = "No approach suggested.";
+    
+    if (data.previousMessages && data.previousMessages.length > 0) {
+      // Analyze the conversation to extract customer info, vehicle interests, and key points
+      const customerMessages = data.previousMessages
+        .filter(msg => msg.role === 'customer')
+        .map(msg => msg.content)
+        .join("\n");
+        
+      const assistantMessages = data.previousMessages
+        .filter(msg => msg.role === 'assistant')
+        .map(msg => msg.content)
+        .join("\n");
+      
+      // Create better insights from conversation
+      if (customerMessages.includes("credit") || customerMessages.includes("score")) {
+        extractedInsights.push({ key: "Credit Information", value: "Mentioned credit/financing", confidence: 1.0 });
+      }
+      
+      if (customerMessages.includes("trade") || customerMessages.includes("trade-in")) {
+        extractedInsights.push({ key: "Trade-in", value: "Has vehicle to trade", confidence: 1.0 });
+      }
+      
+      if (customerMessages.toLowerCase().includes("cash")) {
+        extractedInsights.push({ key: "Payment", value: "Interested in cash purchase", confidence: 1.0 });
+      }
+      
+      // Extract vehicle interests
+      const carBrands = ["toyota", "honda", "ford", "chevrolet", "bmw", "audi", "mercedes", "lexus", "kia", "hyundai"];
+      for (const brand of carBrands) {
+        if (customerMessages.toLowerCase().includes(brand)) {
+          extractedVehicleInterests.push({ make: brand.charAt(0).toUpperCase() + brand.slice(1), model: "Unknown", confidence: 1.0 });
+        }
+      }
+      
+      // Create summary
+      extractedSummary = `Customer contacted us about ${extractedVehicleInterests.length > 0 ? 
+        extractedVehicleInterests.map(v => v.make).join(', ') + ' vehicles' : 
+        'vehicles'}. ${extractedInsights.length > 0 ? 
+        'They mentioned ' + extractedInsights.map(i => i.value.toLowerCase()).join(' and ') + '.' : 
+        ''}`;
+      
+      // Create suggested approach
+      if (extractedInsights.length > 0 || extractedVehicleInterests.length > 0) {
+        const approaches = [];
+        if (extractedInsights.find(i => i.key === "Credit Information")) {
+          approaches.push("Discuss financing options");
+        }
+        if (extractedInsights.find(i => i.key === "Trade-in")) {
+          approaches.push("Review trade-in process and valuation");
+        }
+        if (extractedInsights.find(i => i.key === "Payment") && extractedInsights.find(i => i.key === "Payment").value.includes("cash")) {
+          approaches.push("Prepare cash purchase options");
+        }
+        if (extractedVehicleInterests.length > 0) {
+          approaches.push(`Highlight ${extractedVehicleInterests.map(v => v.make).join(', ')} inventory`);
+        }
+        
+        suggestedApproach = approaches.length > 0 ? approaches.join(". ") + "." : "Follow standard sales process.";
+      }
+    }
+    
+    // Create a text-based actionable dossier
     const dossier = {
       id: mockConversationId,
       conversationId: mockConversationId,
       dealershipId: mockDealershipId,
       customerName: customerName,
       customerContact: "test@example.com",
-      conversationSummary: "This is a test summary generated for demo purposes.",
-      customerInsights: [
-        { key: "Intent", value: "Vehicle purchase inquiry", confidence: 0.9 },
-        { key: "Budget", value: "$30,000-$40,000", confidence: 0.7 },
-        { key: "Timeline", value: "Within 2 weeks", confidence: 0.8 }
-      ],
-      vehicleInterests: [
-        { make: "Toyota", model: "Camry", year: 2023, trim: "XLE", confidence: 0.85 }
-      ],
-      suggestedApproach: "Follow up quickly with financing options and available inventory for Toyota Camry models.",
-      urgency: "high",
+      conversationSummary: extractedSummary,
+      customerInsights: extractedInsights.length > 0 ? extractedInsights : [{ key: "Info", value: "No specific insights extracted", confidence: 1.0 }],
+      vehicleInterests: extractedVehicleInterests.length > 0 ? extractedVehicleInterests : [],
+      suggestedApproach: suggestedApproach,
+      urgency: "medium",
       fullConversationHistory: formattedHistory,
       escalationReason: data.reason || "Requested via testing interface",
-      createdAt: new Date()
+      createdAt: new Date(),
+      
+      // Added more action-oriented, text-based formats
+      actionItems: [
+        "• " + suggestedApproach
+      ],
+      customerBulletPoints: extractedInsights.map(insight => `• ${insight.key}: ${insight.value}`),
+      vehicleBulletPoints: extractedVehicleInterests.map(v => `• Interested in: ${v.make} ${v.model || 'models'}`),
+      nextSteps: [
+        "• Follow up within 24 hours",
+        "• Use direct phone contact first, then email"
+      ]
     };
     
     // We already formatted the conversation history above

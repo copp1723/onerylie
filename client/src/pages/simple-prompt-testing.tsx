@@ -560,8 +560,28 @@ export default function AdvancedPromptTesting() {
                           )}
                           
                           <div className="mt-3">
-                            <p className="font-semibold">Suggested Approach:</p>
-                            <p className="text-muted-foreground whitespace-pre-line">{handoverDossier.suggestedApproach}</p>
+                            <p className="font-semibold">Next Steps:</p>
+                            <div className="space-y-2 mt-1">
+                              {/* Display action items if available */}
+                              {handoverDossier.actionItems && handoverDossier.actionItems.map((item, idx) => (
+                                <p key={`action-${idx}`} className="text-muted-foreground whitespace-pre-line">{item}</p>
+                              ))}
+                              
+                              {/* Display customer bullet points if available */}
+                              {handoverDossier.customerBulletPoints && handoverDossier.customerBulletPoints.map((item, idx) => (
+                                <p key={`customer-${idx}`} className="text-muted-foreground whitespace-pre-line">{item}</p>
+                              ))}
+                              
+                              {/* Display next steps if available */}
+                              {handoverDossier.nextSteps && handoverDossier.nextSteps.map((item, idx) => (
+                                <p key={`next-${idx}`} className="text-muted-foreground whitespace-pre-line">{item}</p>
+                              ))}
+                              
+                              {/* Fallback to suggested approach if no action items */}
+                              {(!handoverDossier.actionItems && !handoverDossier.customerBulletPoints && !handoverDossier.nextSteps) && (
+                                <p className="text-muted-foreground whitespace-pre-line">{handoverDossier.suggestedApproach}</p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
