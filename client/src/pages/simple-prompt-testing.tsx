@@ -231,7 +231,28 @@ export default function AdvancedPromptTesting() {
       }
       
       const data = await result.json();
+      
+      // Update conversation history with this exchange
+      const newCustomerMessage = {
+        role: 'customer',
+        content: customerMessage,
+        timestamp: new Date()
+      };
+      
+      const newAssistantMessage = {
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date()
+      };
+      
+      // Add both messages to the conversation history
+      setConversationHistory([...conversationHistory, newCustomerMessage, newAssistantMessage]);
+      
+      // Update the response display
       setResponse(showJson ? JSON.stringify(data, null, 2) : data.response);
+      
+      // Clear the customer message input for the next message
+      setCustomerMessage('');
     } catch (err) {
       console.error('Error testing prompt:', err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
