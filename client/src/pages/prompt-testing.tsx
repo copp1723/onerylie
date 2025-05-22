@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ChatMessage } from "@/components/chat-message";
+// Import components
+import { ChatMessage } from "../components/chat-message";
 
 interface PromptTestResponse {
   response: string;

@@ -71,7 +71,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Generate AI response
     const startTime = Date.now();
-    const aiResponse = await generateResponse(customerMessage, context, /* experimental */ false);
+    const aiResponse = await generateResponse(customerMessage, context);
     const responseTime = Date.now() - startTime;
 
     // Return the response
