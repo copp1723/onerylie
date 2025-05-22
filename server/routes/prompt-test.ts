@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { generateResponse } from '../services/openai';
+import OpenAI from 'openai';
 
 const router = Router();
 
@@ -79,7 +80,6 @@ router.post('/', async (req: Request, res: Response) => {
     
     try {
       // Create a simplified version of what we need here to avoid complex dependencies
-      const OpenAI = require('openai');
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       
       const messages = [
