@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments, type HandoverDossier } from "./services/openai";
-import { sendHandoverEmail } from "./services/email";
+import { sendHandoverEmail, sendConversationSummary } from "./services/email";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
@@ -450,6 +450,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching conversation details:', error);
       res.status(500).json({ message: 'Server error fetching conversation details' });
+    }
+  });
+  
+  // Send conversation summary via email
+  const emailConversationSchema = z.object({
+    conversationId: z.number(),
+    emailTo: z.string().email(),
+    emailFrom: z.string().email().optional(),
+    subject: z.string().optional(),
+  });
+  
+  app.post('/api/conversations/:conversationId/email', async (req, res) => {
+    try {
+      const { conversationId, emailTo, emailFrom, subject } = emailConversationSchema.parse({
+        ...req.body,
+        conversationId: parseInt(req.params.conversationId)
+      });
+      
+      // Get conversation details
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      // Get all messages for the conversation
+      const messages = await storage.getMessagesByConversation(conversationId);
+      
+      // Get dealership information
+      const dealership = await storage.getDealership(conversation.dealershipId);
+      if (!dealership) {
+        return res.status(404).json({ message: 'Dealership not found' });
+      }
+      
+      // Send the email
+      const result = await sendConversationSummary({
+        toEmail: emailTo,
+        fromEmail: emailFrom || `rylie@${dealership.domain || 'rylie-ai.com'}`,
+        conversation,
+        messages,
+        dealershipName: dealership.name
+      });
+      
+      if (result) {
+        // Log email sending activity
+        await storage.createMessage({
+          conversationId,
+          content: `Conversation summary sent to ${emailTo}`,
+          isFromCustomer: false,
+          channel: 'system',
+        });
+        
+        return res.json({ success: true, message: `Conversation summary sent to ${emailTo}` });
+      } else {
+        return res.status(500).json({ message: 'Failed to send email' });
+      }
+    } catch (error) {
+      console.error('Error sending conversation summary email:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
+      }
+      return res.status(500).json({ message: 'Server error sending email' });
     }
   });
 
