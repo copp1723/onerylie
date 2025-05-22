@@ -1,0 +1,122 @@
+You’ll need several key pieces of information and technical resources from the PureCars team to successfully stand up and integrate the new Rylie backend. Here’s a forward-looking, no-nonsense breakdown of exactly what you’ll need—grouped by category:
+
+1. API Integration Details
+a. Inbound Event Delivery (PureCars → Rylie)
+Endpoint Specification:
+ How will PureCars POST customer replies to Rylie? (Payload URL, method, headers)
+
+
+Payload Contract:
+ Exact JSON schema PureCars will send (fields for customer, campaign, message, etc.)
+
+
+Authentication:
+ What auth will PureCars use when calling your /inbound API? (API key, OAuth, etc.)
+
+
+Event Triggers:
+ When, specifically, will PureCars POST to Rylie? (e.g., on every customer reply? Batched? Real-time?)
+
+
+b. Outbound Delivery (Rylie → PureCars)
+Reply API Specification:
+ If Rylie needs to call back to PureCars for delivery/confirmation, what’s the expected endpoint and contract?
+
+
+Email/ADF Details:
+ If Rylie must send lead summaries via email, what’s the required format and delivery method? (Plain email, attachment, ADF, etc.)
+
+
+
+2. Data & Business Logic
+a. Inventory Data
+Data Source:
+ Where/how does PureCars want to provide dealership inventory?
+ (Real-time API, SFTP/CSV feed, periodic batch uploads, direct DB access)
+
+
+Schema:
+ Required fields for each inventory item (e.g., VIN, model, trim, price, features, dealer/store ID)
+
+
+Update Frequency:
+ How often is inventory refreshed? (Live, hourly, daily?)
+
+
+b. Persona & Campaign Context
+Persona Mapping:
+ How should Rylie determine which persona config to load? (store_id, campaign_id, other key?)
+
+
+Custom Arguments:
+ What persona/prompt options are required per store? (Tone, feature emphasis, etc.)
+
+
+Escalation Triggers:
+ What scenarios require handoff to a human? (Compliance, specific keywords, custom business rules)
+
+
+
+3. Security & Compliance
+Allowed Data Scope:
+ What customer data fields can/can’t be stored or used in prompts?
+
+
+PII/Compliance Requirements:
+ Any restrictions on how customer info is handled, logged, or used? (GDPR, CCPA, etc.)
+
+
+API Key/Secret Rotation:
+ Preferred method for exchanging and rotating secrets (shared vault, email, secure portal?)
+
+
+
+4. Operational & Technical Logistics
+Environment URLs:
+ Staging and production endpoint URLs for both PureCars and Rylie.
+
+
+Contact Points:
+ Key technical contacts for API troubleshooting and escalation.
+
+
+SLAs:
+ Response/uptime expectations, notification protocol for outages/incidents.
+
+
+Monitoring/Logging Expectations:
+ Any specific logging, audit, or reporting standards to align with?
+
+
+
+5. Miscellaneous Integration Needs
+Testing/UAT:
+ Sample payloads and sandbox credentials for integration testing.
+
+
+Branding/Persona Inputs:
+ Any brand guidelines, sample conversations, or “voice” documentation for tuning persona configs.
+
+
+Reporting Requirements:
+ Any periodic reporting, metrics, or email summaries needed by the PureCars team.
+
+
+
+Summary Table (What to Request from PureCars)
+Area
+What to Request
+API Integration
+- POST URL and payload spec for customer reply events- Authentication details- Outbound/Email specs
+Data
+- Inventory data source and schema- Persona mapping rules- Escalation triggers/business logic
+Security
+- Allowed data fields- PII/compliance rules- API key/secret handling instructions
+Operations
+- Staging/prod URLs- Support contacts- SLA expectations- Monitoring/logging requirements
+Miscellaneous
+- Test payloads- Branding/voice docs- Reporting/analytics requirements
+
+
+ 
+
