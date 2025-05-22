@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { generateResponse } from '../services/openai';
-import OpenAI from 'openai';
 
 const router = Router();
 
@@ -64,60 +62,45 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     
-    // Set up context for AI response
-    const context = {
-      systemPrompt: processedPrompt,
-      customerName: 'Test Customer',
-      dealershipName: personaArguments?.dealershipName || 'Test Dealership',
-      previousMessages: previousMessages || [],
-      relevantVehicles: [], // No specific vehicles in this test
-      personaArguments: personaArguments || {} // Pass persona arguments to the OpenAI service
-    };
-
-    // Generate AI response directly for prompt testing
-    const startTime = Date.now();
-    let aiResponse;
+    // Built augmented prompt with URLs if present
+    if (personaArguments?.tradeInUrl) {
+      processedPrompt += `\n\nTRADE-IN URL: ${personaArguments.tradeInUrl}`;
+    }
     
-    try {
-      // Create a simplified version of what we need here to avoid complex dependencies
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    if (personaArguments?.financeApplicationUrl) {
+      processedPrompt += `\n\nFINANCE APPLICATION URL: ${personaArguments.financeApplicationUrl}`;
+    }
+
+    // Set up mock response - this is temporary for testing
+    const startTime = Date.now();
+    
+    // Simulate AI response based on customer message type
+    let response;
+    if (customerMessage.toLowerCase().includes('trade')) {
+      response = "We have a great trade-in program! I'd be happy to help you get an estimate for your current vehicle. You can start the process online through our trade-in valuation tool. Would you like me to send you the link?";
       
-      const messages = [
-        { role: "system", content: processedPrompt },
-        ...previousMessages.map(msg => ({
-          role: msg.role === "customer" ? "user" : "assistant",
-          content: msg.content
-        })),
-        { role: "user", content: customerMessage }
-      ];
+      if (personaArguments?.tradeInUrl) {
+        response += `\n\nHere's our trade-in valuation tool: ${personaArguments.tradeInUrl}`;
+      }
+    } 
+    else if (customerMessage.toLowerCase().includes('financ') || customerMessage.toLowerCase().includes('loan')) {
+      response = "Our financing department offers competitive rates and flexible terms to fit your budget. You can start the pre-approval process online to save time at the dealership.";
       
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o", 
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000,
-      });
-      
-      aiResponse = {
-        response: completion.choices[0].message.content || "I apologize, but I couldn't generate a response.",
-        shouldEscalate: false
-      };
-    } catch (error) {
-      console.error("Error generating response:", error);
-      aiResponse = {
-        response: "I apologize, but I'm having trouble processing your request right now. Let me connect you with a human representative who can assist you.",
-        shouldEscalate: true,
-        reason: "LLM processing error"
-      };
+      if (personaArguments?.financeApplicationUrl) {
+        response += `\n\nHere's our finance application: ${personaArguments.financeApplicationUrl}`;
+      }
+    }
+    else {
+      response = "Thank you for reaching out to us! I'm here to help with any questions you might have about our inventory, financing options, or scheduling a test drive. How can I assist you today?";
     }
     
     const responseTime = Date.now() - startTime;
 
     // Return the response
     return res.status(200).json({
-      response: aiResponse.response,
-      shouldEscalate: aiResponse.shouldEscalate,
-      reason: aiResponse.reason || null,
+      response: response,
+      shouldEscalate: false,
+      reason: null,
       responseTime
     });
   } catch (error) {
