@@ -12,8 +12,17 @@ export function ChatMessage({ message, isCustomer }: ChatMessageProps) {
   const formatMessage = (text: string): { paragraphs: string[] } => {
     if (isCustomer) return { paragraphs: [text] }; // Only process AI responses
     
-    // Find and process URLs to remove descriptive text
-    const processText = (inputText: string): string => {
+    // Process markdown-style links
+    const processMarkdownLinks = (inputText: string): string => {
+      // Replace markdown-style links [text](url) with just the URL
+      const markdownLinkRegex = /\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g;
+      return inputText.replace(markdownLinkRegex, (_, linkText, url) => {
+        return `${linkText} (${url})`;
+      });
+    };
+    
+    // Find and process descriptive URLs to make them cleaner
+    const processDescriptiveUrls = (inputText: string): string => {
       // Replace text like "Trade-In Valuation Tool: URL" with just the URL
       const labeledUrlRegex = /(.*?)(?:trade-in valuation tool|trade-in tool|finance application|finance app|application):\s*(https?:\/\/[^\s]+)/gi;
       return inputText.replace(labeledUrlRegex, (_, prefix, url) => {
@@ -22,10 +31,12 @@ export function ChatMessage({ message, isCustomer }: ChatMessageProps) {
     };
     
     // Process the text to clean it up
-    const cleanedText = processText(text);
+    let processedText = text;
+    processedText = processMarkdownLinks(processedText);
+    processedText = processDescriptiveUrls(processedText);
     
     // Split text by paragraph breaks and clean each paragraph
-    const paragraphs = cleanedText.split('\n\n');
+    const paragraphs = processedText.split('\n\n');
     const formattedParagraphs = paragraphs
       .map((p: string) => p.trim())
       .filter((p: string) => p.length > 0);
