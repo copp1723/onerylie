@@ -1,19 +1,19 @@
+
 import React from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Loader2 } from 'lucide-react';
-import { AuthButtons } from './AuthButtons';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from './ui/card';
+import { Button } from './ui/button';
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
+  requireAdmin?: boolean;
 };
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, isError } = useAuth();
+export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
+  const { user, isAuthenticated, isLoading } = useAuth();
 
-  // Show a brief loading state only for initial load
-  if (isLoading && !isError) {
+  if (isLoading) {
     return (
       <div className="flex h-[70vh] w-full items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -21,21 +21,22 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // If not authenticated (either due to error or no user), show the login card
-  if (!isAuthenticated) {
+  if (!isAuthenticated || (requireAdmin && user?.role !== 'admin')) {
     return (
       <div className="flex h-[70vh] w-full items-center justify-center">
         <Card className="w-[400px]">
           <CardHeader>
-            <CardTitle>Login Required</CardTitle>
+            <CardTitle>Access Required</CardTitle>
             <CardDescription>
-              You need to be logged in to access this prompt testing page.
+              {!isAuthenticated 
+                ? 'You need to be logged in to access this area.'
+                : 'You need administrator access for this area.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="mb-4 text-sm text-muted-foreground">
-              This area contains tools for testing and developing Rylie AI prompts. 
-              Please log in with your credentials to continue.
+              This area contains tools for testing and developing AI prompts.
+              Please log in with appropriate credentials to continue.
             </p>
           </CardContent>
           <CardFooter className="flex justify-center">
@@ -43,7 +44,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
               size="lg"
               onClick={() => window.location.href = '/api/login'}
             >
-              Log In Now
+              {isAuthenticated ? 'Switch Account' : 'Log In Now'}
             </Button>
           </CardFooter>
         </Card>
@@ -51,6 +52,5 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // If authenticated, show the protected content
   return <>{children}</>;
 }
