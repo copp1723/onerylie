@@ -339,17 +339,16 @@ export default function AdvancedPromptTesting() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="bg-muted rounded-md p-4 min-h-[300px] relative">
-                  {response ? (
-                    <div className={showJson ? "font-mono text-sm" : "whitespace-pre-line"}>
+                {!response ? (
+                  <div className="bg-muted rounded-md p-4 min-h-[300px] text-muted-foreground">
+                    Response will appear here after testing a prompt...
+                  </div>
+                ) : showJson ? (
+                  // Show full JSON response
+                  <div className="bg-muted rounded-md p-4 min-h-[300px] relative">
+                    <div className="font-mono text-sm overflow-auto max-h-[500px]">
                       {response}
                     </div>
-                  ) : (
-                    <div className="text-muted-foreground">
-                      Response will appear here after testing a prompt...
-                    </div>
-                  )}
-                  {response && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -358,8 +357,80 @@ export default function AdvancedPromptTesting() {
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  // Show only the customer-facing message
+                  <div className="space-y-6">
+                    <div className="bg-primary/10 rounded-md p-4 border-l-4 border-primary">
+                      <h3 className="font-medium mb-2">Customer-Facing Message:</h3>
+                      <div className="whitespace-pre-line">
+                        {(() => {
+                          try {
+                            const parsedResponse = JSON.parse(response);
+                            return parsedResponse.answer || "No customer message found in response";
+                          } catch (e) {
+                            // If not valid JSON, show the raw response
+                            return response;
+                          }
+                        })()}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          try {
+                            const parsedResponse = JSON.parse(response);
+                            copyToClipboard(parsedResponse.answer || "");
+                          } catch (e) {
+                            copyToClipboard(response);
+                          }
+                        }}
+                      >
+                        <Copy className="h-3 w-3 mr-1" /> Copy Message
+                      </Button>
+                    </div>
+                    
+                    <div className="rounded-md p-4 border border-muted">
+                      <h3 className="font-medium mb-2">Response Analysis:</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(() => {
+                          try {
+                            const parsedResponse = JSON.parse(response);
+                            // Create a concise summary of the response analysis
+                            const analysisFields = [
+                              { label: "Customer Name", value: parsedResponse.name },
+                              { label: "Query", value: parsedResponse.user_query },
+                              { label: "Analysis", value: parsedResponse.analysis },
+                              { label: "Channel", value: parsedResponse.type },
+                              { label: "Insights", value: parsedResponse.quick_insights },
+                              { label: "Sales Readiness", value: parsedResponse.sales_readiness },
+                              { label: "Handover Needed", value: parsedResponse.reply_required ? "Yes" : "No" }
+                            ];
+                            
+                            return analysisFields.map((field, index) => (
+                              <div key={index} className="text-sm">
+                                <span className="font-medium">{field.label}:</span>{" "}
+                                <span className="text-muted-foreground">{field.value || "N/A"}</span>
+                              </div>
+                            ));
+                          } catch (e) {
+                            return <div className="text-muted-foreground">Could not parse response analysis</div>;
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowJson(true)}
+                    >
+                      View Full JSON Response
+                    </Button>
+                  </div>
+                )}
               </CardContent>
               {response && (
                 <CardFooter>
