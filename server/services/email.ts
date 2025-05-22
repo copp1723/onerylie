@@ -200,70 +200,114 @@ export async function sendConversationSummary(
 export async function sendHandoverEmail(
   to: string,
   subject: string,
-  handoverData: any
+  dossier: any
 ): Promise<boolean> {
   try {
     const from = 'leads@rylie-ai.com';
     
     // Extract handover details
-    const customerName = handoverData.customerName || 'Customer';
-    const contactInfo = handoverData.contactInfo || 'Not provided';
-    const reason = handoverData.reason || 'Manual handover';
+    const customerName = dossier.customerName || 'Customer';
+    const customerContact = dossier.customerContact || 'Not provided';
+    const escalationReason = dossier.escalationReason || 'Manual handover';
+    const urgency = dossier.urgency?.toUpperCase() || 'MEDIUM';
     const handoverDate = new Date().toLocaleString();
     
-    // Format messages
-    const messagesHtml = handoverData.messages && Array.isArray(handoverData.messages) 
-      ? handoverData.messages.map((msg: any) => `
+    // Format action items
+    const actionItemsHtml = dossier.actionItems && Array.isArray(dossier.actionItems) 
+      ? dossier.actionItems.map((item: string) => `<li>${item}</li>`).join('') 
+      : '<li>Follow up with the customer to address their needs.</li>';
+    
+    // Format customer points
+    const customerPointsHtml = dossier.customerBulletPoints && Array.isArray(dossier.customerBulletPoints) 
+      ? dossier.customerBulletPoints.map((item: string) => `<li>${item}</li>`).join('') 
+      : '';
+    
+    // Format vehicle interests
+    const vehiclePointsHtml = dossier.vehicleBulletPoints && Array.isArray(dossier.vehicleBulletPoints) 
+      ? dossier.vehicleBulletPoints.map((item: string) => `<li>${item}</li>`).join('') 
+      : '';
+    
+    // Format next steps
+    const nextStepsHtml = dossier.nextSteps && Array.isArray(dossier.nextSteps)
+      ? dossier.nextSteps.map((item: string) => `<li>${item}</li>`).join('')
+      : '<li>Contact customer directly to follow up</li>';
+    
+    // Format conversation history
+    const messagesHtml = dossier.fullConversationHistory && Array.isArray(dossier.fullConversationHistory) 
+      ? dossier.fullConversationHistory.map((msg: any) => `
           <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
             <div style="font-weight: bold;">${msg.role === 'customer' ? customerName : 'Rylie AI'}</div>
             <div>${msg.content}</div>
             <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
-              ${msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ''}
+              ${msg.timestamp ? new Date(msg.timestamp).toLocaleString() : ''}
             </div>
           </div>
         `).join('') 
       : '<p>No messages in this conversation</p>';
     
-    // Format vehicle interest
-    const vehicleHtml = handoverData.vehicle 
-      ? `
-        <h3>Vehicle of Interest:</h3>
-        <ul>
-          <li><strong>Year:</strong> ${handoverData.vehicle.year || 'Unknown'}</li>
-          <li><strong>Make:</strong> ${handoverData.vehicle.make || 'Unknown'}</li>
-          <li><strong>Model:</strong> ${handoverData.vehicle.model || 'Unknown'}</li>
-          <li><strong>Trim:</strong> ${handoverData.vehicle.trim || 'Unknown'}</li>
-          <li><strong>Price:</strong> $${handoverData.vehicle.price || 'Unknown'}</li>
-          <li><strong>VIN:</strong> ${handoverData.vehicle.vin || 'Unknown'}</li>
-        </ul>
-      `
-      : '';
-    
     const html = `
-      <h2>Lead Handover: ${customerName}</h2>
-      <p>A conversation has been escalated to you for follow-up.</p>
-      
-      <h3>Lead Details:</h3>
-      <ul>
-        <li><strong>Customer:</strong> ${customerName}</li>
-        <li><strong>Contact Info:</strong> ${contactInfo}</li>
-        <li><strong>Handover Reason:</strong> ${reason}</li>
-        <li><strong>Handover Date:</strong> ${handoverDate}</li>
-      </ul>
-      
-      ${vehicleHtml}
-      
-      <h3>Conversation History:</h3>
-      <div style="margin-top: 15px;">
-        ${messagesHtml}
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #0056b3; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0;">LEAD HANDOVER DOSSIER</h1>
+          <p style="margin: 5px 0 0 0; font-size: 18px;">${urgency} PRIORITY</p>
+        </div>
+        
+        <div style="padding: 20px; border: 1px solid #ddd; border-top: none;">
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">Customer Information</h2>
+            <p><strong>Name:</strong> ${customerName}</p>
+            <p><strong>Contact:</strong> ${customerContact}</p>
+            <p><strong>Handover Date:</strong> ${handoverDate}</p>
+            <p><strong>Reason:</strong> ${escalationReason}</p>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">SUMMARY</h2>
+            <p>${dossier.conversationSummary}</p>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">ACTION ITEMS</h2>
+            <ul style="padding-left: 20px;">
+              ${actionItemsHtml}
+            </ul>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">CUSTOMER INSIGHTS</h2>
+            <ul style="padding-left: 20px;">
+              ${customerPointsHtml}
+            </ul>
+          </div>
+          
+          ${vehiclePointsHtml ? `
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">VEHICLE INTERESTS</h2>
+            <ul style="padding-left: 20px;">
+              ${vehiclePointsHtml}
+            </ul>
+          </div>
+          ` : ''}
+          
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">NEXT STEPS</h2>
+            <ul style="padding-left: 20px;">
+              ${nextStepsHtml}
+            </ul>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">CONVERSATION HISTORY</h2>
+            <div style="margin-top: 15px;">
+              ${messagesHtml}
+            </div>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; text-align: center;">
+            <p>This handover was automatically generated by Rylie AI. For questions, contact support.</p>
+          </div>
+        </div>
       </div>
-      
-      <h3>Recommended Approach:</h3>
-      <p>${handoverData.recommendedApproach || 'Follow up with the customer to address their needs and questions.'}</p>
-      
-      <p style="margin-top: 20px;">
-        To respond to this lead, please contact the customer directly or log in to your Rylie AI dashboard.
-      </p>
     `;
     
     return await sendEmail(process.env.SENDGRID_API_KEY || '', {
