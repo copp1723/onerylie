@@ -562,7 +562,24 @@ router.post('/handover', async (req, res) => {
       console.error("Error parsing analysis results", e);
     }
     
-    // Return both the dossier and the analysis
+    // Import the email service
+    const { sendHandoverEmail } = await import('../services/email');
+    
+    // In a real implementation, we would get the dealership email from the database
+    // For testing, we'll use a placeholder email
+    const dealershipEmail = "sales@example.com";
+    
+    // Create a descriptive subject line
+    const subject = `Lead Handover: ${dossier.customerName} - ${dossier.urgency.toUpperCase()} Priority`;
+    
+    // Send the email with the dossier
+    const emailSent = await sendHandoverEmail(
+      dealershipEmail,
+      subject,
+      dossier
+    );
+    
+    // Return both the dossier, analysis, and email status
     return res.json({
       dossier: {
         id: dossier.id,
@@ -571,11 +588,16 @@ router.post('/handover', async (req, res) => {
         customerInsights: dossier.customerInsights,
         vehicleInterests: dossier.vehicleInterests,
         suggestedApproach: dossier.suggestedApproach,
-        urgency: dossier.urgency
+        urgency: dossier.urgency,
+        emailSent,
+        emailSentTo: emailSent ? dealershipEmail : null,
+        emailSentAt: emailSent ? new Date() : null
       },
       analysis: analysisResults,
       success: true,
-      message: "Handover dossier generated successfully"
+      message: emailSent 
+        ? "Handover dossier generated and email notification sent successfully" 
+        : "Handover dossier generated but email notification could not be sent"
     });
   } catch (error: any) {
     console.error('Error generating handover dossier:', error);
