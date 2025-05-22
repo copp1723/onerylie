@@ -379,4 +379,59 @@ router.post('/experiments/:id/end', apiKeyAuth, async (req: AuthenticatedRequest
   }
 });
 
+// Rate a prompt variant based on customer feedback
+const ratePromptSchema = z.object({
+  variantId: z.number(),
+  conversationId: z.number(),
+  messageId: z.number(),
+  rating: z.number().min(1).max(5),
+});
+
+router.post('/variants/rate', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const dealershipId = req.dealershipId;
+    if (!dealershipId) {
+      return res.status(403).json({ message: 'Not authorized to rate prompt variants' });
+    }
+    
+    const { variantId, conversationId, messageId, rating } = ratePromptSchema.parse(req.body);
+    
+    // Find the metrics for this message to ensure it exists
+    const metrics = await abTestService.findMetricsForMessage(variantId, conversationId, messageId);
+    
+    if (!metrics) {
+      return res.status(404).json({ message: 'No metrics found for the specified message' });
+    }
+    
+    // Verify the metrics belong to this dealership by checking the variant
+    const variant = await db.query.promptVariants.findFirst({
+      where: and(
+        eq(promptVariants.id, variantId),
+        eq(promptVariants.dealershipId, dealershipId)
+      )
+    });
+    
+    if (!variant) {
+      return res.status(403).json({ message: 'Not authorized to rate this prompt variant' });
+    }
+    
+    // Update the customer rating
+    const success = await abTestService.updateMetricsRating(metrics.id, rating);
+    
+    if (!success) {
+      return res.status(500).json({ message: 'Failed to update rating' });
+    }
+    
+    res.json({ message: 'Rating recorded successfully' });
+  } catch (error) {
+    console.error('Error rating prompt variant:', error);
+    
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
+    }
+    
+    res.status(500).json({ message: 'Failed to record rating' });
+  }
+});
+
 export default router;
