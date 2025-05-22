@@ -1,0 +1,105 @@
+Here are **realistic mock customer replies** to typical dealership marketing campaigns, including equity, lease maturity, overdue service, and lost lead scenarios. Each example is written as a natural response to an initial dealership outreach and is ready for Rylie to pick up the conversation.
+
+---
+
+### 1. **Equity Offer Response**
+
+**Dealership Initial Message:**
+“Hi Jane, it looks like you have equity in your current vehicle! Would you be interested in upgrading to a newer model with little or no money down?”
+
+**Customer:**
+“Hey, I didn’t realize my car had any equity. What does that actually mean for me? I’m not sure if I want a new car but maybe if my payment wouldn’t go up a lot. Can you tell me what my options are?”
+
+---
+
+### 2. **Lease Maturity/Lease End Response**
+
+**Dealership Initial Message:**
+“Hi Chris, your lease on the 2021 Camry is coming up soon. Would you like to explore your options for a new lease or purchase?”
+
+**Customer:**
+“Yeah I got your message about my lease ending soon. What do I need to do? Can I just drop off the car or do I have to set up an appointment first? Not sure if I want to lease again or maybe buy this time.”
+
+---
+
+### 3. **Overdue Service / Service Due Response**
+
+**Dealership Initial Message:**
+“Hi Maria, our records show your 2018 CR-V is due for its next scheduled service. Can we help you book an appointment?”
+
+**Customer:**
+“Thanks for reminding me! I’ve been putting it off. Is there a way to get a loaner car if my service takes a while? Also, what’s the earliest you could fit me in on a Saturday?”
+
+---
+
+### 4. **Lost Lead / No Recent Activity Response**
+
+**Dealership Initial Message:**
+“Hi Alex, we noticed you were looking at several SUVs on our site last month but didn’t finish your purchase. Anything we can do to help you move forward?”
+
+**Customer:**
+“Oh hey, yeah I was looking but just got busy with work and never came back. I’m still interested if you have anything with AWD under \$25k. Do you have any specials or new arrivals that fit what I was looking for?”
+
+---
+
+### 5. **Trade-In Value Inquiry**
+
+**Dealership Initial Message:**
+“Hi Sean, we’re seeing a high demand for vehicles like your 2017 Tacoma. Want to see what it’s worth toward a newer model?”
+
+**Customer:**
+“I’ve been thinking about trading in but not sure if now’s the right time. Can you give me a rough idea of what my truck’s worth without me coming in? It’s got about 120k miles but I’ve kept up with all the maintenance.”
+
+---
+
+### 6. **Service Satisfaction / CSI Follow-Up**
+
+**Dealership Initial Message:**
+“Hi Dana, just checking in to see how your recent service visit went. Was everything to your satisfaction?”
+
+**Customer:**
+“Yeah the service was good, thanks. Only thing is the waiting area was kind of crowded when I was there. The guy who checked me in was great though.”
+
+---
+
+### 7. **Equity + Upgrade/Conquest Offer**
+
+**Dealership Initial Message:**
+“Hi Terrence, your current vehicle puts you in a great position to upgrade with little or nothing down! Interested in seeing what new models you qualify for?”
+
+**Customer:**
+“That sounds pretty good. Are there any deals for people who are already customers? I don’t want my payment to go way up, but I’d consider upgrading if it makes sense.”
+
+---
+
+### 8. **Lease Pull-Ahead**
+
+**Dealership Initial Message:**
+“Hi Rachel, you’re eligible to upgrade early from your lease with potential savings. Want to find out more?”
+
+**Customer:**
+“I didn’t realize I could get out early. Will there be any penalties if I end my lease a few months before it’s up? How does that work?”
+
+---
+
+### 9. **General Price Shopper/Lost Lead**
+
+**Dealership Initial Message:**
+“Hi Greg, we noticed you requested a quote on the new Accord. Any questions I can answer to help you move forward?”
+
+**Customer:**
+“I got a couple quotes from other places but haven’t made up my mind yet. If you can beat \$399 a month, I might be interested. What’s your best deal right now?”
+
+---
+
+### 10. **Service Special / Coupon Response**
+
+**Dealership Initial Message:**
+“Hi Linda, we have a service special this month—20% off brake service. Interested in booking?”
+
+**Customer:**
+“I could probably use that soon, my brakes have been squeaking a bit. Do you guys offer shuttle service, or do I need to wait at the dealership?”
+
+---
+
+If you want sample follow-ups or full multi-turn conversations for any of these, just say the word.
