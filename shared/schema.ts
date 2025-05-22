@@ -264,6 +264,8 @@ export const dealershipsRelations = relations(dealerships, ({ many }) => ({
   conversations: many(conversations),
   personas: many(personas),
   apiKeys: many(apiKeys),
+  promptVariants: many(promptVariants),
+  promptExperiments: many(promptExperiments),
 }));
 
 export const vehiclesRelations = relations(vehicles, ({ one }) => ({
@@ -306,6 +308,50 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   }),
 }));
 
+// A/B Testing relations
+export const promptVariantsRelations = relations(promptVariants, ({ many, one }) => ({
+  metrics: many(promptMetrics),
+  experimentVariants: many(experimentVariants),
+  dealership: one(dealerships, {
+    fields: [promptVariants.dealershipId],
+    references: [dealerships.id]
+  })
+}));
+
+export const promptMetricsRelations = relations(promptMetrics, ({ one }) => ({
+  variant: one(promptVariants, {
+    fields: [promptMetrics.variantId],
+    references: [promptVariants.id]
+  }),
+  conversation: one(conversations, {
+    fields: [promptMetrics.conversationId],
+    references: [conversations.id]
+  }),
+  message: one(messages, {
+    fields: [promptMetrics.messageId],
+    references: [messages.id]
+  })
+}));
+
+export const promptExperimentsRelations = relations(promptExperiments, ({ many, one }) => ({
+  experimentVariants: many(experimentVariants),
+  dealership: one(dealerships, {
+    fields: [promptExperiments.dealershipId],
+    references: [dealerships.id]
+  })
+}));
+
+export const experimentVariantsRelations = relations(experimentVariants, ({ one }) => ({
+  experiment: one(promptExperiments, {
+    fields: [experimentVariants.experimentId],
+    references: [promptExperiments.id]
+  }),
+  variant: one(promptVariants, {
+    fields: [experimentVariants.variantId],
+    references: [promptVariants.id]
+  })
+}));
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -327,3 +373,16 @@ export type InsertPersona = z.infer<typeof insertPersonaSchema>;
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+
+// A/B Testing type exports
+export type PromptVariant = typeof promptVariants.$inferSelect;
+export type InsertPromptVariant = z.infer<typeof insertPromptVariantSchema>;
+
+export type PromptMetrics = typeof promptMetrics.$inferSelect;
+export type InsertPromptMetrics = z.infer<typeof insertPromptMetricsSchema>;
+
+export type PromptExperiment = typeof promptExperiments.$inferSelect;
+export type InsertPromptExperiment = z.infer<typeof insertPromptExperimentSchema>;
+
+export type ExperimentVariant = typeof experimentVariants.$inferSelect;
+export type InsertExperimentVariant = z.infer<typeof insertExperimentVariantSchema>;
