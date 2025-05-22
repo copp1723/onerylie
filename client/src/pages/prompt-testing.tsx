@@ -70,7 +70,7 @@ If you need to escalate to a human representative, do so politely and explain th
   // Mutation for testing the prompt
   const testPromptMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/prompt-test', {
+      const response = await apiRequest('/api/prompt-test', {
         method: 'POST',
         data: {
           customerMessage,
@@ -78,7 +78,8 @@ If you need to escalate to a human representative, do so politely and explain th
           personaArguments,
           previousMessages: conversationHistory
         }
-      }) as Promise<PromptTestResponse>;
+      });
+      return response as PromptTestResponse;
     },
     onSuccess: (data) => {
       // Add the customer message and AI response to the conversation history
@@ -136,7 +137,7 @@ If you need to escalate to a human representative, do so politely and explain th
                 <CardHeader>
                   <CardTitle>System Prompt Template</CardTitle>
                   <CardDescription>
-                    Edit the system prompt template. Use {{placeholders}} for personalization.
+                    Edit the system prompt template. Use double curly braces for personalization.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

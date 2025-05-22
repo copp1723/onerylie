@@ -81,6 +81,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register inventory management routes
   app.use('/api/inventory', inventoryRoutes);
   
+  // Register prompt testing routes
+  app.use('/api/prompt-test', promptTestRoutes);
+  
   // Set up scheduled task to process email reports
   // In a production environment, this would be handled by a proper scheduler
   // For this demo, we'll check every minute if any reports are due

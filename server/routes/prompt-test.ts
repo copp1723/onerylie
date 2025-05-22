@@ -63,19 +63,15 @@ router.post('/', async (req: Request, res: Response) => {
     // Set up context for AI response
     const context = {
       systemPrompt: processedPrompt,
-      dealershipId: 0, // Using 0 for testing purposes
-      customerId: 0, // Using 0 for testing purposes
-      userInfo: {
-        name: 'Test Customer',
-        contactInfo: 'test@example.com'
-      },
-      messageHistory: previousMessages,
-      vehicles: [] // No specific vehicles in this test
+      customerName: 'Test Customer',
+      dealershipName: personaArguments?.dealershipName || 'Test Dealership',
+      previousMessages: previousMessages || [],
+      relevantVehicles: [] // No specific vehicles in this test
     };
 
     // Generate AI response
     const startTime = Date.now();
-    const aiResponse = await generateResponse(customerMessage, context);
+    const aiResponse = await generateResponse(customerMessage, context, /* experimental */ false);
     const responseTime = Date.now() - startTime;
 
     // Return the response
