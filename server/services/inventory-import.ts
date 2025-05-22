@@ -76,29 +76,47 @@ export async function processTsvInventory(
  * @returns Structured vehicle data
  */
 function mapTsvToVehicle(data: Record<string, string>, dealershipId: number): InsertVehicle {
-  // This mapping should be adjusted based on the actual TSV format received
+  // Updated mapping based on the actual dealership TSV format
+  
+  // Handle images - check if Image URL exists and use it
+  const imageUrls: string[] = [];
+  if (data['Image URL'] && data['Image URL'].trim()) {
+    imageUrls.push(data['Image URL'].trim());
+  }
+  
+  // Features aren't directly in the TSV, but we can set up an empty array
+  // or extract from the description if useful
+  const featuresList: string[] = [];
+
   return {
     dealershipId,
     vin: data.VIN || '',
-    stockNumber: data.StockNumber || data.Stock || '',
+    stockNumber: data.stock_number || '',
     make: data.Make || '',
     model: data.Model || '',
     year: parseInt(data.Year || '0', 10),
     trim: data.Trim || '',
-    exteriorColor: data.ExteriorColor || data.Color || '',
-    interiorColor: data.InteriorColor || '',
+    exteriorColor: data.Color || '',
+    interiorColor: '',
     mileage: parseInt(data.Mileage || '0', 10),
-    price: parseFloat(data.Price || data.MSRP || '0'),
-    msrp: parseFloat(data.MSRP || data.Price || '0'),
-    bodyStyle: data.BodyStyle || data.Body || '',
+    price: parseFloat(data.Price || data['Formatted Price']?.replace(/[$,]/g, '') || '0'),
+    msrp: parseFloat(data['Formatted Price']?.replace(/[$,]/g, '') || data.Price || '0'),
+    bodyStyle: data.Type || data['Vehicle Type'] || '',
     transmission: data.Transmission || '',
-    engine: data.Engine || '',
-    fuelType: data.FuelType || data.Fuel || '',
-    drivetrain: data.Drivetrain || data.DriveType || '',
-    features: data.Features ? JSON.stringify(data.Features.split(',').map(f => f.trim())) : '[]',
-    description: data.Description || '',
-    images: data.Images ? JSON.stringify(data.Images.split(',').map(img => img.trim())) : '[]',
-    status: 'active',
+    engine: '',
+    fuelType: data['Fuel Type'] || '',
+    drivetrain: data.Drivetrain || '',
+    features: featuresList,
+    description: data.Description || data.Title || '',
+    images: imageUrls,
+    status: data.Condition?.toLowerCase() === 'new' ? 'new' : 'used',
+    isActive: true,
+    url: data.URL || '',
+    doors: data.Doors ? parseInt(data.Doors, 10) : null,
+    advertiserName: data['Advertiser Name'] || '',
+    imageType: data['Image Type'] || '',
+    vehicleType: data['Vehicle Type'] || '',
+    condition: data.Condition || '',
   };
 }
 
