@@ -64,8 +64,11 @@ async function applyIndexes() {
   }
 }
 
-// Only run if directly executed (not imported)
-if (require.main === module) {
+// Run the function automatically (ES modules don't have require.main)
+// We're using import.meta.url to detect if this file is being executed directly
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+
+if (isMainModule) {
   applyIndexes()
     .then((result) => {
       if (result.success) {
