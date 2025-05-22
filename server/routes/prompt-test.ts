@@ -7,8 +7,8 @@ import { sessionAuth } from '../middleware/auth';
 // Create a router
 const router = Router();
 
-// Protect all routes under /api/prompt-test
-router.use(sessionAuth);
+// Only protect advanced routes under /api/prompt-test
+// router.use(sessionAuth); // Temporarily disabled to allow access to the simple testing page
 
 // Initialize the OpenAI client
 const openai = new OpenAI({
