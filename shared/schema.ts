@@ -28,21 +28,20 @@ export const insertDealershipSchema = createInsertSchema(dealerships).pick({
 export const users = pgTable("users", {
   id: text("id").primaryKey().notNull(),
   email: text("email").unique(),
-  firstName: text("first_name"),
-  lastName: text("last_name"),
-  profileImageUrl: text("profile_image_url"),
+  name: text("name"),
+  username: text("username"),
+  password: text("password"),
   role: text("role").notNull().default("user"),
   dealershipId: integer("dealership_id").references(() => dealerships.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   id: true,
   email: true,
-  firstName: true,
-  lastName: true,
-  profileImageUrl: true,
+  name: true,
+  username: true,
+  password: true,
   role: true,
   dealershipId: true,
 });
