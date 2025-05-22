@@ -411,7 +411,7 @@ export default function Personas() {
                         </FormControl>
                         <FormDescription>
                           The system prompt that defines how Rylie behaves for this persona.
-                          Use variables like {{dealershipName}} that will be replaced at runtime.
+                          Use variables like {"{{dealershipName}}"} that will be replaced at runtime.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

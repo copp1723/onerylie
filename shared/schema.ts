@@ -20,7 +20,8 @@ export const insertDealershipSchema = createInsertSchema(dealerships).pick({
   location: true,
   contactEmail: true,
   contactPhone: true,
-  website: true,
+  domain: true,
+  handoverEmail: true,
 });
 
 // Base user schema
