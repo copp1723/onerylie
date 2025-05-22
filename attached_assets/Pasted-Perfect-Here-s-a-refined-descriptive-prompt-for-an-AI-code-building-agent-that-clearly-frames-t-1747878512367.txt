@@ -1,0 +1,122 @@
+Perfect. Here’s a refined **descriptive prompt** for an AI code building agent that clearly frames the context, the role of PureCars and Rylie, and specifies that Rylie is the conversational AI application you want to build.
+
+---
+
+## App Build Request: **Rylie – PureCars Conversational AI Platform**
+
+**Background & Context:**
+PureCars is a leading automotive marketing and data platform. Their product “Rylie” is the AI-powered customer engagement and conversational assistant that takes over after the initial customer outreach. PureCars is ending its partnership with the existing AI provider and needs a next-generation, in-house solution for Rylie.
+
+**What’s Needed:**
+Build the entire “Rylie” conversational AI backend as a robust, API-driven application. This system will power real-time, high-quality, personalized conversations with dealership customers, starting from the moment a customer responds to an initial message sent by PureCars.
+
+---
+
+### **1. End-to-End Conversation Orchestration**
+
+* **PureCars sends the initial message to customers (outside Rylie’s scope).**
+* **Once a customer replies, Rylie (the app you’re building) takes over:**
+
+  * Ingests the customer’s reply and context (via secure API).
+  * Determines the right response using inventory, campaign context, and persona config.
+  * Crafts and delivers context-aware replies, escalating to humans as needed.
+  * Optionally, sends structured summaries or lead dossiers via email (ADF or other format).
+
+---
+
+### **2. System Requirements**
+
+#### **API Endpoints**
+
+* `/inbound`: Accepts POSTs with customer reply, channel, and context from PureCars.
+* `/reply`: Returns the AI-generated reply for delivery.
+* `/handover`: Escalates to human support when needed.
+* All endpoints require secure authentication.
+
+#### **Database**
+
+* Inventory database (PostgreSQL or similar), holding all relevant vehicle data per dealership/store.
+* Persona and prompt configuration storage, supporting per-store or per-customer argument customization.
+
+#### **AI Engine**
+
+* LLM integration (OpenAI GPT-4o, Claude 3, or similar) for generating human-quality, context-aware replies.
+* Runtime prompt injection with persona arguments (tone, priorities, etc.) for each dealership or customer.
+* Escalation logic (keyword detection, confidence scores) to hand off edge cases or complex queries.
+
+#### **Payload & Data Flow**
+
+* All message payloads are strictly structured (JSON).
+* Persona arguments, conversation context, and inventory are injected into every AI response.
+* All responses and handoffs conform to PureCars’ data contracts and compliance rules.
+
+---
+
+### **3. Customization & Config Management**
+
+* **Store and Update Arguments:**
+  All persona and prompt arguments are editable per dealership (store), and optionally per customer session, via config files or a database table. Example:
+
+  ```json
+  {
+    "store_id": "FL123",
+    "prompt_template": "Friendly, informative, always stress safety features.",
+    "arguments": {
+      "tone": "friendly",
+      "priority_features": ["Safety", "Technology"]
+    }
+  }
+  ```
+* **Prompt Engine:**
+  These arguments are injected dynamically into each LLM prompt, ensuring Rylie can easily change its “vibe” or approach for each dealer or even each customer.
+
+---
+
+### **4. Security, Compliance, & Monitoring**
+
+* TLS/HTTPS everywhere, strong API authentication, environment-based secret management.
+* Strict compliance: Never mention price, financing, or vehicles not in active inventory.
+* All conversations logged for QA and regulatory compliance.
+* Uptime, error, and usage monitoring (Grafana, BetterStack, or similar).
+
+---
+
+### **5. Cloud-Native and Scalable**
+
+* Deployable to any modern cloud platform (Render, AWS, GCP, etc.).
+* Auto-scaling support, Dockerized, with CI/CD for reliable updates.
+* Unit and integration tests for all APIs and prompt/response flows.
+
+---
+
+### **6. Example E2E Flow**
+
+1. **Customer replies to PureCars:**
+   → PureCars posts customer message and context to `/inbound` API.
+2. **Rylie ingests and processes:**
+   → Loads relevant persona config, inventory, and campaign context.
+   → Crafts AI prompt and calls LLM to generate reply.
+3. **AI reply or escalation:**
+   → Returns crafted response to `/reply` endpoint for delivery.
+   → If escalation needed, triggers `/handover` with all context for human review.
+4. **Reporting and email:**
+   → Optionally sends conversation summaries or lead dossiers to dealership via email (e.g., ADF format).
+
+---
+
+### **7. Deliverables**
+
+* Fully functional, API-driven conversational AI backend called Rylie.
+* Inventory-aware, persona-customizable LLM response engine.
+* Configurable, tweakable prompt and persona management for each store/dealership.
+* Cloud-ready deployment, tested and secured, with comprehensive logging and monitoring.
+* All endpoints and payloads documented and adhering to PureCars’ integration specs.
+
+---
+
+**Summary Statement:**
+We are building Rylie: a cloud-native, API-first conversational AI platform for PureCars. Rylie will own all post-response customer communication, leveraging dealership inventory, campaign data, and dynamic persona arguments to generate high-quality, context-aware replies, and escalate as needed. All configuration is easily adjustable per store or customer, making Rylie fully future-proof and customizable.
+
+---
+
+*Let me know if you want example schemas, payload contracts, or sample prompt templates to go with this request.*
