@@ -18,7 +18,10 @@ const promptTestSchema = z.object({
     workingHours: z.string().optional(),
     salesEmail: z.string().optional(),
     handoverEmail: z.string().optional(),
+    financeApplicationUrl: z.string().optional(),
+    tradeInUrl: z.string().optional(),
     customInstructions: z.string().optional(),
+    constraints: z.string().optional(),
   }).optional(),
   previousMessages: z.array(
     z.object({
