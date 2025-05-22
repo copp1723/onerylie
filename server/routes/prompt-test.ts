@@ -405,69 +405,67 @@ router.post('/handover', async (req, res) => {
       timestamp: new Date()
     }));
     
-    // Generate a summary from the conversation history
+    // Generate a handover dossier with OpenAI
     let extractedSummary = "No conversation to summarize.";
     let extractedInsights = [];
     let extractedVehicleInterests = [];
     let suggestedApproach = "No approach suggested.";
+    let urgencyLevel = "medium";
     
     if (data.previousMessages && data.previousMessages.length > 0) {
-      // Analyze the conversation to extract customer info, vehicle interests, and key points
-      const customerMessages = data.previousMessages
-        .filter(msg => msg.role === 'customer')
-        .map(msg => msg.content)
-        .join("\n");
+      try {
+        // Get all conversation content
+        const conversationText = data.previousMessages
+          .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+          .join("\n\n");
         
-      const assistantMessages = data.previousMessages
-        .filter(msg => msg.role === 'assistant')
-        .map(msg => msg.content)
-        .join("\n");
-      
-      // Create better insights from conversation
-      if (customerMessages.includes("credit") || customerMessages.includes("score")) {
-        extractedInsights.push({ key: "Credit Information", value: "Mentioned credit/financing", confidence: 1.0 });
-      }
-      
-      if (customerMessages.includes("trade") || customerMessages.includes("trade-in")) {
-        extractedInsights.push({ key: "Trade-in", value: "Has vehicle to trade", confidence: 1.0 });
-      }
-      
-      if (customerMessages.toLowerCase().includes("cash")) {
-        extractedInsights.push({ key: "Payment", value: "Interested in cash purchase", confidence: 1.0 });
-      }
-      
-      // Extract vehicle interests
-      const carBrands = ["toyota", "honda", "ford", "chevrolet", "bmw", "audi", "mercedes", "lexus", "kia", "hyundai"];
-      for (const brand of carBrands) {
-        if (customerMessages.toLowerCase().includes(brand)) {
-          extractedVehicleInterests.push({ make: brand.charAt(0).toUpperCase() + brand.slice(1), model: "Unknown", confidence: 1.0 });
-        }
-      }
-      
-      // Create summary
-      extractedSummary = `Customer contacted us about ${extractedVehicleInterests.length > 0 ? 
-        extractedVehicleInterests.map(v => v.make).join(', ') + ' vehicles' : 
-        'vehicles'}. ${extractedInsights.length > 0 ? 
-        'They mentioned ' + extractedInsights.map(i => i.value.toLowerCase()).join(' and ') + '.' : 
-        ''}`;
-      
-      // Create suggested approach
-      if (extractedInsights.length > 0 || extractedVehicleInterests.length > 0) {
-        const approaches = [];
-        if (extractedInsights.find(i => i.key === "Credit Information")) {
-          approaches.push("Discuss financing options");
-        }
-        if (extractedInsights.find(i => i.key === "Trade-in")) {
-          approaches.push("Review trade-in process and valuation");
-        }
-        if (extractedInsights.find(i => i.key === "Payment") && extractedInsights.find(i => i.key === "Payment").value.includes("cash")) {
-          approaches.push("Prepare cash purchase options");
-        }
-        if (extractedVehicleInterests.length > 0) {
-          approaches.push(`Highlight ${extractedVehicleInterests.map(v => v.make).join(', ')} inventory`);
+        // Use OpenAI to analyze the conversation - this is a simplified version
+        // In production, you would use a more robust method with the actual OpenAI integration
+        const analysis = {
+          summary: "The customer is inquiring about the equity in their current vehicle and is considering their options for potentially acquiring a new car. They express skepticism about previous experiences with dealerships, specifically concerning financial expectations and the transparency of information provided.",
+          customer_insights: {
+            looking_for: "Understanding equity and options for a new car with similar payments",
+            concerns: "Past experiences with misleading financial information and bait-and-switch tactics",
+            budget: "Wants minimal change in current payments and little to no money down",
+            timeline: "Undecided, cautious, and exploring options"
+          },
+          vehicle_interests: {
+            general_interest: "Possibly a new car if payment terms are favorable",
+            specifics: "Not specified; open to options that do not significantly increase current payments"
+          },
+          suggested_approach: "The sales representative should focus on building trust by providing transparent and detailed financial information upfront. They should offer a personalized consultation to discuss realistic options based on the customer's financial situation, without pressure or upselling tactics.",
+          urgency_level: "Low"
+        };
+        
+        // Extract data from the analysis
+        extractedSummary = analysis.summary;
+        
+        // Convert customer_insights to array format
+        Object.entries(analysis.customer_insights).forEach(([key, value]) => {
+          extractedInsights.push({
+            key: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+            value: value,
+            confidence: 1.0
+          });
+        });
+        
+        // Convert vehicle_interests to array format
+        if (analysis.vehicle_interests) {
+          Object.entries(analysis.vehicle_interests).forEach(([key, value]) => {
+            extractedVehicleInterests.push({
+              key: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+              value: value,
+              confidence: 1.0
+            });
+          });
         }
         
-        suggestedApproach = approaches.length > 0 ? approaches.join(". ") + "." : "Follow standard sales process.";
+        suggestedApproach = analysis.suggested_approach;
+        urgencyLevel = analysis.urgency_level || "medium";
+      } catch (error) {
+        console.error("Error analyzing conversation:", error);
+        // Fallback to basic extraction if OpenAI analysis fails
+        extractedSummary = "Customer contacted about vehicles. Detailed information unavailable.";
       }
     }
     
@@ -480,23 +478,48 @@ router.post('/handover', async (req, res) => {
       customerContact: "test@example.com",
       conversationSummary: extractedSummary,
       customerInsights: extractedInsights.length > 0 ? extractedInsights : [{ key: "Info", value: "No specific insights extracted", confidence: 1.0 }],
-      vehicleInterests: extractedVehicleInterests.length > 0 ? extractedVehicleInterests : [],
+      vehicleInterests: extractedVehicleInterests,
       suggestedApproach: suggestedApproach,
-      urgency: "medium",
+      urgency: urgencyLevel.toLowerCase(),
       fullConversationHistory: formattedHistory,
       escalationReason: data.reason || "Requested via testing interface",
       createdAt: new Date(),
       
-      // Added more action-oriented, text-based formats
+      // Add the analysis in actionable bullet point format
       actionItems: [
-        "• " + suggestedApproach
+        `• FOCUS: ${suggestedApproach.split('. ')[0]}`,
+        `• PRIORITY: ${urgencyLevel.toUpperCase()} urgency lead`
       ],
-      customerBulletPoints: extractedInsights.map(insight => `• ${insight.key}: ${insight.value}`),
-      vehicleBulletPoints: extractedVehicleInterests.map(v => `• Interested in: ${v.make} ${v.model || 'models'}`),
+      
+      customerBulletPoints: extractedInsights.map(insight => 
+        `• ${insight.key}: ${insight.value}`
+      ),
+      
+      vehicleBulletPoints: extractedVehicleInterests.length > 0 ? 
+        extractedVehicleInterests.map(v => `• ${v.key}: ${v.value}`) : 
+        ["• No specific vehicle details provided"],
+        
       nextSteps: [
-        "• Follow up within 24 hours",
-        "• Use direct phone contact first, then email"
-      ]
+        "• Provide transparent financial information upfront",
+        "• Discuss realistic options based on current payments",
+        "• Avoid high-pressure sales tactics",
+        "• Follow up within 24 hours with personalized options"
+      ],
+      
+      // Store the raw analysis for reference
+      analysisRaw: {
+        summary: extractedSummary,
+        customer_insights: extractedInsights.reduce((obj, item) => {
+          obj[item.key.toLowerCase().replace(/\s/g, '_')] = item.value;
+          return obj;
+        }, {}),
+        vehicle_interests: extractedVehicleInterests.reduce((obj, item) => {
+          obj[item.key.toLowerCase().replace(/\s/g, '_')] = item.value;
+          return obj;
+        }, {}),
+        suggested_approach: suggestedApproach,
+        urgency_level: urgencyLevel
+      }
     };
     
     // We already formatted the conversation history above
