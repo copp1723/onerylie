@@ -1,5 +1,4 @@
-import { Router, Response, NextFunction } from 'express';
-import { z } from 'zod';
+import { Router, Response } from 'express';
 import { apiKeyAuth, type AuthenticatedRequest } from '../middleware/auth';
 import { processScheduledReports } from '../services/scheduler';
 import { log } from '../vite';
@@ -7,15 +6,20 @@ import { log } from '../vite';
 const router = Router();
 
 // Route to manually trigger report processing
-router.post('/reports/trigger', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/trigger', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // Only allow admin or dealership staff to trigger reports
+    // Only allow dealership staff to trigger reports
     if (!req.dealershipId) {
-      return res.status(403).json({ message: 'Not authorized to trigger reports' });
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to trigger reports' 
+      });
     }
     
     // Process all scheduled reports
     await processScheduledReports();
+    
+    log(`Reports triggered by dealership ${req.dealershipId}`, 'scheduler');
     
     return res.json({ 
       success: true, 

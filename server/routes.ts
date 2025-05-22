@@ -11,7 +11,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import emailReportRoutes from "./routes/email-reports";
-import apiReportTriggerRoutes from "./routes/api-report-trigger";
+import reportApiRoutes from "./routes/report-api";
 import { log } from "./vite";
 
 // Define validation schemas
@@ -96,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/dealerships', emailReportRoutes);
   
   // Register report trigger route
-  app.use('/api', apiReportTriggerRoutes);
+  app.use('/api/reports', reportApiRoutes);
   
   // Set up scheduled task to process email reports
   // In a production environment, this would be handled by a proper scheduler

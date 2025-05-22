@@ -45,7 +45,7 @@ async function testReportTrigger() {
     
     // Test manual report trigger
     console.log("\n----- TESTING MANUAL REPORT TRIGGER -----");
-    const triggerResponse = await fetch('http://localhost:5000/api/trigger-reports', {
+    const triggerResponse = await fetch('http://localhost:5000/api/reports/trigger', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
