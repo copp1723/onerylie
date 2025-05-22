@@ -80,17 +80,28 @@ export class ABTestService {
       variantId: number;
       conversationId: number;
       messageId: number;
-      responseTime?: number;
-      tokensUsed?: number;
-      customerMessageLength?: number;
-      assistantResponseLength?: number;
-      wasEscalated?: boolean;
-      wasSuccessful?: boolean;
-      customerRating?: number;
+      responseTime?: number | null;
+      tokensUsed?: number | null;
+      customerMessageLength?: number | null;
+      assistantResponseLength?: number | null;
+      wasEscalated?: boolean | null;
+      wasSuccessful?: boolean | null;
+      customerRating?: number | null;
     }
   ): Promise<boolean> {
+    // Convert null values to undefined to match schema
+    const cleanedMetrics = {
+      ...metrics,
+      responseTime: metrics.responseTime === null ? undefined : metrics.responseTime,
+      tokensUsed: metrics.tokensUsed === null ? undefined : metrics.tokensUsed,
+      customerMessageLength: metrics.customerMessageLength === null ? undefined : metrics.customerMessageLength,
+      assistantResponseLength: metrics.assistantResponseLength === null ? undefined : metrics.assistantResponseLength,
+      wasEscalated: metrics.wasEscalated === null ? undefined : metrics.wasEscalated,
+      wasSuccessful: metrics.wasSuccessful === null ? undefined : metrics.wasSuccessful,
+      customerRating: metrics.customerRating === null ? undefined : metrics.customerRating,
+    };
     try {
-      await db.insert(promptMetrics).values(metrics);
+      await db.insert(promptMetrics).values(cleanedMetrics);
       return true;
     } catch (error) {
       console.error('Error recording prompt metrics:', error);
@@ -332,7 +343,7 @@ export class ABTestService {
     }
     
     // Calculate total traffic allocation for renormalization
-    const totalAllocation = activeVariants.reduce((sum, v) => sum + v.trafficAllocation, 0);
+    const totalAllocation = activeVariants.reduce((sum, v) => sum + (v.trafficAllocation || 0), 0);
     
     // Generate a random number between 0 and the total allocation
     const randomPoint = Math.random() * totalAllocation;
@@ -340,7 +351,7 @@ export class ABTestService {
     // Select variant based on traffic allocation
     let cumulativeAllocation = 0;
     for (const experimentVariant of activeVariants) {
-      cumulativeAllocation += experimentVariant.trafficAllocation;
+      cumulativeAllocation += (experimentVariant.trafficAllocation || 0);
       if (randomPoint <= cumulativeAllocation) {
         return experimentVariant.variant;
       }

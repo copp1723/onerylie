@@ -5,6 +5,7 @@ import { z } from "zod";
 import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments, type HandoverDossier } from "./services/openai";
 import { sendHandoverEmail, sendConversationSummary } from "./services/email";
+import { generateABTestedResponse } from "./services/abtest-openai-integration";
 import { processScheduledReports } from "./services/scheduler";
 import session from "express-session";
 import passport from "passport";
@@ -371,12 +372,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         previousMessages,
       };
 
-      // Generate AI response with potential handover dossier
-      const { response, shouldEscalate, reason, handoverDossier } = await generateResponse(
+      // Store the customer message to get message ID for A/B testing
+      const customerMessage = await storage.createMessage({
+        conversationId: conversation.id,
+        content: message,
+        isFromCustomer: true,
+        channel: 'api',
+      });
+      
+      // Generate AI response with A/B testing and potential handover dossier
+      const { 
+        response, 
+        shouldEscalate, 
+        reason, 
+        handoverDossier,
+        variantId 
+      } = await generateABTestedResponse(
         message,
         context,
         persona.promptTemplate,
-        persona.arguments as PersonaArguments
+        persona.arguments as PersonaArguments,
+        req.dealershipId!,
+        conversation,
+        customerMessage
       );
 
       // Handle the handover process with email if configured and if should escalate
