@@ -178,21 +178,49 @@ router.post('/', async (req: Request, res: Response) => {
           messages,
           temperature: 0.7,
           max_tokens: 1000,
+          response_format: { type: "json_object" }
         });
         
-        // Get the response content
-        let responseContent = completion.choices[0].message.content || "I apologize, but I couldn't generate a response.";
+        // Get the JSON response and parse it
+        let responseContent = completion.choices[0].message.content || "{}";
+        let jsonResponse;
         
-        // Post-process to ensure proper paragraph spacing
-        // This replaces sentence ending punctuation followed by space with punctuation + double newline
-        responseContent = responseContent.replace(/([.!?])\s+/g, '$1\n\n');
-        
-        result = {
-          response: responseContent,
-          shouldEscalate: false,
-          reason: null,
-          responseTime: Date.now() - startTime
-        };
+        try {
+          jsonResponse = JSON.parse(responseContent);
+          
+          // Extract the main text answer from our JSON format
+          let textResponse = jsonResponse.answer || "I apologize, but I couldn't generate a response.";
+          
+          // Post-process to ensure proper paragraph spacing
+          // This replaces sentence ending punctuation followed by space with punctuation + double newline
+          textResponse = textResponse.replace(/([.!?])\s+/g, '$1\n\n');
+          
+          // Determine if we should escalate based on JSON data
+          const shouldEscalate = 
+            (jsonResponse.sales_readiness === "high") || 
+            (jsonResponse.retrieve_inventory_data === true);
+          
+          result = {
+            response: textResponse,
+            jsonResponse: jsonResponse, // Include the full JSON for debugging
+            shouldEscalate: shouldEscalate,
+            channelType: jsonResponse.type || "unknown", // Email or SMS
+            reason: shouldEscalate ? "Customer shows high sales readiness or needs inventory data" : null,
+            responseTime: Date.now() - startTime
+          };
+        } catch (jsonError) {
+          console.error("Error parsing JSON response:", jsonError);
+          
+          // Fallback to using the raw content if JSON parsing fails
+          responseContent = responseContent.replace(/([.!?])\s+/g, '$1\n\n');
+          
+          result = {
+            response: responseContent,
+            shouldEscalate: false,
+            reason: "Failed to parse JSON response",
+            responseTime: Date.now() - startTime
+          };
+        }
       } catch (aiError) {
         console.error("OpenAI API error:", aiError);
         // Fallback to stub on API error

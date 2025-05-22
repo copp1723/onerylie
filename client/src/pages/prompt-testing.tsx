@@ -223,6 +223,9 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
   >([]);
 
   // Mutation for testing the prompt
+  const [jsonDetails, setJsonDetails] = useState<any>(null);
+  const [channelType, setChannelType] = useState<string>("text");
+
   const testPromptMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('/api/prompt-test', {
@@ -237,7 +240,10 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
       
       // Parse JSON response
       const data = await response.json();
-      return data as PromptTestResponse;
+      return data as PromptTestResponse & { 
+        jsonResponse?: any; 
+        channelType?: string;
+      };
     },
     onSuccess: (data) => {
       // Add the customer message and AI response to the conversation history
@@ -246,6 +252,16 @@ Build trust, keep it upbeat, and always move the customer forward—never roboti
         { role: "customer", content: customerMessage },
         { role: "assistant", content: data.response }
       ]);
+      
+      // Store JSON details if available
+      if (data.jsonResponse) {
+        setJsonDetails(data.jsonResponse);
+      }
+      
+      // Set channel type if available
+      if (data.channelType) {
+        setChannelType(data.channelType);
+      }
       
       // Clear the customer message input
       setCustomerMessage("");
