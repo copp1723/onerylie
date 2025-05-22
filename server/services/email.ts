@@ -13,13 +13,13 @@ if (process.env.SENDGRID_API_KEY) {
   mailService.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-// Email parameters interface
+// Email parameters interface - ensuring required fields
 interface EmailParams {
   to: string;
   from: string;
   subject: string;
-  text?: string;
-  html?: string;
+  text: string;
+  html: string;
 }
 
 /**
@@ -58,8 +58,8 @@ export async function sendEmail(
       to: params.to,
       from: params.from,
       subject: params.subject,
-      text: params.text,
-      html: params.html
+      text: params.text || '',
+      html: params.html || ''
     });
     
     return true;
@@ -212,25 +212,45 @@ export async function sendHandoverEmail(
     const urgency = dossier.urgency?.toUpperCase() || 'MEDIUM';
     const handoverDate = new Date().toLocaleString();
     
-    // Format action items
-    const actionItemsHtml = dossier.actionItems && Array.isArray(dossier.actionItems) 
-      ? dossier.actionItems.map((item: string) => `<li>${item}</li>`).join('') 
+    // Format action items based on suggested approach
+    const suggestedApproach = dossier.suggestedApproach || 'Follow up with the customer to address their needs.';
+    const actionItems = suggestedApproach.split('\n').filter((item: string) => item.trim().length > 0);
+    const actionItemsHtml = actionItems.length > 0
+      ? actionItems.map((item: string) => `<li>${item}</li>`).join('') 
       : '<li>Follow up with the customer to address their needs.</li>';
     
-    // Format customer points
-    const customerPointsHtml = dossier.customerBulletPoints && Array.isArray(dossier.customerBulletPoints) 
-      ? dossier.customerBulletPoints.map((item: string) => `<li>${item}</li>`).join('') 
+    // Format customer insights
+    const customerPointsHtml = dossier.customerInsights && Array.isArray(dossier.customerInsights) 
+      ? dossier.customerInsights.map((insight: any) => `<li>${insight.key}: ${insight.value}</li>`).join('') 
       : '';
     
     // Format vehicle interests
-    const vehiclePointsHtml = dossier.vehicleBulletPoints && Array.isArray(dossier.vehicleBulletPoints) 
-      ? dossier.vehicleBulletPoints.map((item: string) => `<li>${item}</li>`).join('') 
+    const vehiclePointsHtml = dossier.vehicleInterests && Array.isArray(dossier.vehicleInterests) 
+      ? dossier.vehicleInterests.map((vehicle: any) => {
+          const details = [];
+          if (vehicle.year) details.push(`${vehicle.year}`);
+          if (vehicle.make) details.push(`${vehicle.make}`);
+          if (vehicle.model) details.push(`${vehicle.model}`);
+          if (vehicle.trim) details.push(`${vehicle.trim}`);
+          
+          return `<li>${details.join(' ')} (Confidence: ${vehicle.confidence * 100}%)</li>`;
+        }).join('') 
       : '';
     
-    // Format next steps
-    const nextStepsHtml = dossier.nextSteps && Array.isArray(dossier.nextSteps)
-      ? dossier.nextSteps.map((item: string) => `<li>${item}</li>`).join('')
-      : '<li>Contact customer directly to follow up</li>';
+    // Format next steps from suggested approach if not already provided
+    let nextSteps = [];
+    if (dossier.nextSteps && Array.isArray(dossier.nextSteps)) {
+      nextSteps = dossier.nextSteps;
+    } else {
+      // Create next steps from the suggested approach
+      nextSteps = [
+        'Contact customer within 24 hours',
+        'Reference their specific interests mentioned in the conversation',
+        'Address any unanswered questions from the conversation history'
+      ];
+    }
+    
+    const nextStepsHtml = nextSteps.map((item: string) => `<li>${item}</li>`).join('');
     
     // Format conversation history
     const messagesHtml = dossier.fullConversationHistory && Array.isArray(dossier.fullConversationHistory) 
