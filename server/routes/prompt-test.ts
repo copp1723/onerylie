@@ -73,23 +73,52 @@ router.post('/', async (req: Request, res: Response) => {
       personaArguments: personaArguments || {} // Pass persona arguments to the OpenAI service
     };
 
-    // Generate AI response
+    // Generate AI response directly for prompt testing
     const startTime = Date.now();
-    const aiResponse = await generateResponse(
-      customerMessage, 
-      context, 
-      processedPrompt, 
-      personaArguments || {}
-    );
+    let aiResponse;
+    
+    try {
+      // Create a simplified version of what we need here to avoid complex dependencies
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      const messages = [
+        { role: "system", content: processedPrompt },
+        ...previousMessages.map(msg => ({
+          role: msg.role === "customer" ? "user" : "assistant",
+          content: msg.content
+        })),
+        { role: "user", content: customerMessage }
+      ];
+      
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o", 
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1000,
+      });
+      
+      aiResponse = {
+        response: completion.choices[0].message.content || "I apologize, but I couldn't generate a response.",
+        shouldEscalate: false
+      };
+    } catch (error) {
+      console.error("Error generating response:", error);
+      aiResponse = {
+        response: "I apologize, but I'm having trouble processing your request right now. Let me connect you with a human representative who can assist you.",
+        shouldEscalate: true,
+        reason: "LLM processing error"
+      };
+    }
+    
     const responseTime = Date.now() - startTime;
 
     // Return the response
     return res.status(200).json({
       response: aiResponse.response,
       shouldEscalate: aiResponse.shouldEscalate,
-      escalationReason: aiResponse.reason,
-      responseTime,
-      handoverDossier: aiResponse.handoverDossier
+      reason: aiResponse.reason || null,
+      responseTime
     });
   } catch (error) {
     console.error("Error in prompt test:", error);
