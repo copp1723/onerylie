@@ -11,23 +11,23 @@ async function testSetup() {
   try {
     // 1. Create test dealership if it doesn't exist
     console.log('Creating test dealership...');
-    const [existingDealership] = await db.execute(sql`
+    const existingDealershipResult = await db.execute(sql`
       SELECT id FROM dealerships WHERE name = 'Test Dealership' LIMIT 1
     `);
     
     let dealershipId: number;
     
-    if (existingDealership?.rows?.length > 0) {
+    if (existingDealershipResult.rows && existingDealershipResult.rows.length > 0) {
       console.log('Test dealership already exists.');
-      dealershipId = existingDealership.rows[0].id;
+      dealershipId = existingDealershipResult.rows[0].id;
     } else {
-      const [newDealership] = await db.execute(sql`
+      const newDealershipResult = await db.execute(sql`
         INSERT INTO dealerships (name, location, contact_email, contact_phone, domain, handover_email)
         VALUES ('Test Dealership', '123 Test Street, Testville, CA 90210', 'contact@testdealership.com', '(555) 123-4567', 'testdealership.com', 'sales@testdealership.com')
         RETURNING id
       `);
       
-      dealershipId = newDealership.rows[0].id;
+      dealershipId = newDealershipResult.rows[0].id;
       console.log(`Created test dealership with ID: ${dealershipId}`);
     }
 
