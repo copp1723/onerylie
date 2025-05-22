@@ -60,10 +60,10 @@ async function upsertUser(
   // Match user fields to the existing database schema
   await storage.upsertUser({
     id: claims["sub"],
-    username: claims["sub"],
-    password: "replit-auth", // Not used but required by schema
-    name: [claims["first_name"], claims["last_name"]].filter(Boolean).join(" ") || "Rylie User",
-    email: claims["email"] || `user-${claims["sub"]}@example.com`,
+    email: claims["email"],
+    firstName: claims["first_name"],
+    lastName: claims["last_name"],
+    profileImageUrl: claims["profile_image_url"],
     role: "user"
   });
 }

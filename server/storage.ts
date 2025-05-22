@@ -115,9 +115,11 @@ export class DatabaseStorage implements IStorage {
         .update(users)
         .set({
           email: userData.email,
-          name: userData.name,
-          // Match actual database schema
-          // No updatedAt in our current schema
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
+          role: userData.role,
+          updatedAt: new Date(),
         })
         .where(eq(users.id, userData.id.toString()))
         .returning();
@@ -129,10 +131,10 @@ export class DatabaseStorage implements IStorage {
         .insert(users)
         .values({
           id: userData.id.toString(),
-          username: userData.username,
-          password: userData.password || "replit-auth", // Required by schema
-          name: userData.name,
           email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
           role: userData.role || 'user' // Default role
         })
         .returning();
