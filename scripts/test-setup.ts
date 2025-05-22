@@ -42,8 +42,8 @@ async function testSetup() {
       console.log('Admin user already exists.');
     } else {
       await db.execute(sql`
-        INSERT INTO users (id, name, email, role, dealership_id)
-        VALUES (${adminId}, 'Admin User', 'admin@testdealership.com', 'admin', ${dealershipId})
+        INSERT INTO users (id, username, name, email, password, role, dealership_id)
+        VALUES (${adminId}, 'admin_user', 'Admin User', 'admin@testdealership.com', 'hashed_password_here', 'admin', ${dealershipId})
       `);
       console.log('Created admin user.');
     }
@@ -140,9 +140,9 @@ Always remember to personalize your responses for {{customerName}}.`;
           ${dealershipId}, 'ST12345', 'Toyota', 'RAV4', 2025, 'XLE Premium', 
           'Midnight Black Metallic', 'Black Leather', 'TEST12345678901234', 0, 
           31495, 32999, 'SUV', '8-Speed Automatic', '2.5L 4-Cylinder', 'Hybrid', 
-          'All-Wheel Drive', ${JSON.stringify(['Sunroof', 'Navigation', 'Premium Audio'])}, 
+          'All-Wheel Drive', ARRAY['Sunroof', 'Navigation', 'Premium Audio'], 
           'Brand new Toyota RAV4 Hybrid with excellent fuel economy.', 
-          ${JSON.stringify(['https://example.com/img1.jpg'])}, 'active'
+          ARRAY['https://example.com/img1.jpg'], 'active'
         )
       `);
       
@@ -156,9 +156,9 @@ Always remember to personalize your responses for {{customerName}}.`;
           ${dealershipId}, 'ST54321', 'Honda', 'Accord', 2024, 'Sport', 
           'Platinum White Pearl', 'Black Cloth', 'TEST98765432109876', 0, 
           27895, 28999, 'Sedan', 'CVT', '1.5L Turbo', 'Gasoline', 
-          'Front-Wheel Drive', ${JSON.stringify(['Apple CarPlay', 'Android Auto', 'Lane Keep Assist'])}, 
+          'Front-Wheel Drive', ARRAY['Apple CarPlay', 'Android Auto', 'Lane Keep Assist'], 
           'Stylish and efficient Honda Accord Sport.', 
-          ${JSON.stringify(['https://example.com/img2.jpg'])}, 'active'
+          ARRAY['https://example.com/img2.jpg'], 'active'
         )
       `);
       
@@ -172,9 +172,9 @@ Always remember to personalize your responses for {{customerName}}.`;
           ${dealershipId}, 'ST67890', 'Ford', 'F-150', 2024, 'Lariat', 
           'Velocity Blue', 'Medium Earth Gray', 'TEST13579246802468', 0, 
           51995, 53995, 'Truck', '10-Speed Automatic', '3.5L EcoBoost V6', 'Gasoline', 
-          '4x4', ${JSON.stringify(['Leather Seats', 'SYNC 4', 'Tow Package'])}, 
+          '4x4', ARRAY['Leather Seats', 'SYNC 4', 'Tow Package'], 
           'Powerful and capable Ford F-150 Lariat.', 
-          ${JSON.stringify(['https://example.com/img3.jpg'])}, 'active'
+          ARRAY['https://example.com/img3.jpg'], 'active'
         )
       `);
       

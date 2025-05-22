@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, jsonb, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, jsonb, foreignKey, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
@@ -91,6 +91,17 @@ export const vehicles = pgTable("vehicles", {
   condition: text("condition"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Index for searching by dealership and active status (common filtering)
+    dealershipIdIdx: index("vehicles_dealership_id_idx").on(table.dealershipId),
+    // Index for vehicle searching by make/model/year (common search pattern)
+    makeModelYearIdx: index("vehicles_make_model_year_idx").on(table.make, table.model, table.year),
+    // Index for price range searches
+    priceIdx: index("vehicles_price_idx").on(table.price),
+    // Index for active status filtering
+    isActiveIdx: index("vehicles_is_active_idx").on(table.isActive)
+  };
 });
 
 export const insertVehicleSchema = createInsertSchema(vehicles).pick({
@@ -145,6 +156,22 @@ export const conversations = pgTable("conversations", {
   escalatedToUserId: integer("escalated_to_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Index for filtering conversations by dealership (very common query)
+    dealershipIdIdx: index("conversations_dealership_id_idx").on(table.dealershipId),
+    // Index for filtering by conversation status (active, waiting, escalated)
+    statusIdx: index("conversations_status_idx").on(table.status),
+    // Index for searching by customer (phone or email lookups)
+    customerContactIdx: index("conversations_customer_contact_idx").on(
+      table.customerPhone, 
+      table.customerEmail
+    ),
+    // Index for finding conversations handled by specific users
+    escalatedToUserIdIdx: index("conversations_escalated_user_idx").on(table.escalatedToUserId),
+    // Index for date-based queries (recent/time-based filtering)
+    createdAtIdx: index("conversations_created_at_idx").on(table.createdAt)
+  };
 });
 
 export const insertConversationSchema = createInsertSchema(conversations).pick({
@@ -167,6 +194,20 @@ export const messages = pgTable("messages", {
   channel: text("channel").notNull(),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Index for retrieving all messages in a conversation (very common operation)
+    conversationIdIdx: index("messages_conversation_id_idx").on(table.conversationId),
+    // Index for searching messages by channel
+    channelIdx: index("messages_channel_idx").on(table.channel),
+    // Index for filtering messages by sender type
+    senderTypeIdx: index("messages_sender_type_idx").on(table.isFromCustomer),
+    // Compound index for finding messages in a conversation in chronological order
+    conversationTimeIdx: index("messages_conversation_time_idx").on(
+      table.conversationId, 
+      table.createdAt
+    )
+  };
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({
@@ -223,6 +264,15 @@ export const personas = pgTable("personas", {
   isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Index for dealership-specific persona lookup
+    dealershipIdIdx: index("personas_dealership_id_idx").on(table.dealershipId),
+    // Index for finding default personas
+    isDefaultIdx: index("personas_is_default_idx").on(table.isDefault),
+    // Index for name-based searches
+    nameIdx: index("personas_name_idx").on(table.name)
+  };
 });
 
 export const insertPersonaSchema = createInsertSchema(personas).pick({
@@ -242,6 +292,15 @@ export const apiKeys = pgTable("api_keys", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastUsedAt: timestamp("last_used_at"),
+}, (table) => {
+  return {
+    // Index for fast key lookup during API authentication
+    keyIdx: index("api_keys_key_idx").on(table.key),
+    // Index for dealership-specific key management
+    dealershipIdIdx: index("api_keys_dealership_id_idx").on(table.dealershipId),
+    // Index for filtering active keys
+    isActiveIdx: index("api_keys_is_active_idx").on(table.isActive)
+  };
 });
 
 export const insertApiKeySchema = createInsertSchema(apiKeys).pick({
