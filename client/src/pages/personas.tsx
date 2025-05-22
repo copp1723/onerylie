@@ -126,7 +126,10 @@ export default function Personas() {
 
   // Create persona mutation
   const createPersonaMutation = useMutation({
-    mutationFn: (data: PersonaFormValues) => apiRequest('/api/personas', 'POST', data),
+    mutationFn: (data: PersonaFormValues) => apiRequest('/api/personas', {
+      method: 'POST',
+      data: data
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/personas'] });
       toast({
@@ -149,7 +152,10 @@ export default function Personas() {
   const updatePersonaMutation = useMutation({
     mutationFn: (data: PersonaFormValues) => {
       if (!data.id) throw new Error("Cannot update without ID");
-      return apiRequest(`/api/personas/${data.id}`, 'PATCH', data);
+      return apiRequest(`/api/personas/${data.id}`, {
+        method: 'PATCH',
+        data: data
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/personas'] });
@@ -171,7 +177,9 @@ export default function Personas() {
 
   // Delete persona mutation
   const deletePersonaMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/personas/${id}`, 'DELETE'),
+    mutationFn: (id: number) => apiRequest(`/api/personas/${id}`, {
+      method: 'DELETE'
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/personas'] });
       toast({

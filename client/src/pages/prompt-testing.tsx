@@ -89,7 +89,10 @@ If you need to escalate to a human representative, do so politely and explain th
           previousMessages: conversationHistory
         }
       });
-      return response as PromptTestResponse;
+      
+      // Parse JSON response
+      const data = await response.json();
+      return data as PromptTestResponse;
     },
     onSuccess: (data) => {
       // Add the customer message and AI response to the conversation history
