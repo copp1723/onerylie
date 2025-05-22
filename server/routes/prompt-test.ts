@@ -392,32 +392,43 @@ router.post('/handover', async (req, res) => {
       });
     }
     
-    // Import the handover service for generating a proper dossier
-    const { createHandoverDossier } = await import('../services/handover');
-    
-    // Create a mock conversation and dealership for testing purposes
+    // Create a mock handover dossier without using the database
+    // Create mock values for testing
     const mockConversationId = Math.floor(Math.random() * 10000);
     const mockDealershipId = 1;
-    
-    // Extract customer name from conversation if possible
     let customerName = "Test Customer";
-    const personaArgs = data.personaArguments || {};
     
-    // Create the handover dossier
-    const dossier = await createHandoverDossier({
-      conversationId: mockConversationId,
-      dealershipId: mockDealershipId,
-      customerName,
-      customerContact: "test@example.com",
-      escalationReason: data.reason || "Requested via testing interface"
-    });
-    
-    // Format the conversation history properly
+    // Format the conversation history for the dossier
     const formattedHistory = data.previousMessages.map(msg => ({
       role: msg.role,
       content: msg.content,
       timestamp: new Date()
     }));
+    
+    // Create a mock dossier directly
+    const dossier = {
+      id: mockConversationId,
+      conversationId: mockConversationId,
+      dealershipId: mockDealershipId,
+      customerName: customerName,
+      customerContact: "test@example.com",
+      conversationSummary: "This is a test summary generated for demo purposes.",
+      customerInsights: [
+        { key: "Intent", value: "Vehicle purchase inquiry", confidence: 0.9 },
+        { key: "Budget", value: "$30,000-$40,000", confidence: 0.7 },
+        { key: "Timeline", value: "Within 2 weeks", confidence: 0.8 }
+      ],
+      vehicleInterests: [
+        { make: "Toyota", model: "Camry", year: 2023, trim: "XLE", confidence: 0.85 }
+      ],
+      suggestedApproach: "Follow up quickly with financing options and available inventory for Toyota Camry models.",
+      urgency: "high",
+      fullConversationHistory: formattedHistory,
+      escalationReason: data.reason || "Requested via testing interface",
+      createdAt: new Date()
+    };
+    
+    // We already formatted the conversation history above
     
     // Use our AI to analyze the conversation specifically for the dossier
     const systemPrompt = `
