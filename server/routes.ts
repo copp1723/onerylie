@@ -135,12 +135,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (err) {
             return res.status(500).json({ message: 'Login error' });
           }
+          
+          // Store the complete user object in the session
+          req.session.user = user;
+          req.session.userId = user.id;
+          req.session.role = user.role;
+          
           return res.json({ 
             id: user.id,
             username: user.username,
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            dealershipId: user.dealershipId
           });
         });
       })(req, res);

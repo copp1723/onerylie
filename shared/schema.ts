@@ -3,26 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
-// Base user schema
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  role: text("role").notNull().default("user"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  name: true,
-  email: true,
-  role: true,
-});
-
-// Dealership/Store schema
+// Dealership/Store schema first since it's referenced by users
 export const dealerships = pgTable("dealerships", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -39,9 +20,31 @@ export const insertDealershipSchema = createInsertSchema(dealerships).pick({
   location: true,
   contactEmail: true,
   contactPhone: true,
-  domain: true,
-  handoverEmail: true,
+  website: true,
 });
+
+// Base user schema
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  role: text("role").notNull().default("user"),
+  dealershipId: integer("dealership_id").references(() => dealerships.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  name: true,
+  email: true,
+  role: true,
+  dealershipId: true,
+});
+
+
 
 // Vehicle inventory schema
 export const vehicles = pgTable("vehicles", {
