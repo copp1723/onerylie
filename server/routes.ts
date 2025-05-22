@@ -51,15 +51,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Replit Auth for secure authentication
   await setupAuth(app);
   
+  // Register the prompt testing routes
+  app.use('/api/prompt-test', promptTestRoutes);
+  
   // Authentication endpoint for getting current user info
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
+      if (req.user && req.user.claims && req.user.claims.sub) {
+        // Just return the user claims directly instead of fetching from database
+        // This bypasses the schema mismatch issues
+        res.json({
+          id: req.user.claims.sub,
+          name: req.user.claims.first_name ? 
+            `${req.user.claims.first_name} ${req.user.claims.last_name || ''}`.trim() : 
+            'Rylie User',
+          email: req.user.claims.email || '',
+          role: 'user'
+        });
+      } else {
+        res.status(401).json({ message: "Unauthorized" });
+      }
     } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      console.error("Error processing user info:", error);
+      res.status(500).json({ message: "Failed to process user info" });
     }
   });
 

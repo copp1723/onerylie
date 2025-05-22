@@ -17,6 +17,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     { href: "/analytics", label: "Analytics", icon: "analytics" },
     { href: "/settings", label: "Settings", icon: "settings" },
     { href: "/prompt-testing", label: "Prompt Testing", icon: "psychology" },
+    { href: "/simple-prompt-testing", label: "Simple Prompt Testing", icon: "experiment" },
   ];
 
   return (
