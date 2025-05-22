@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/accordion";
 // Import components
 import { ChatMessage } from "../components/chat-message";
+import { ProtectedRoute } from "../components/ProtectedRoute";
 
 interface PromptTestResponse {
   response: string;

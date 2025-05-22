@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { isAuthenticated } from '../replitAuth';
 
 const router = Router();
 
@@ -107,7 +108,7 @@ const promptTestSchema = z.object({
   ).optional()
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
     // Validate request body
     const validationResult = promptTestSchema.safeParse(req.body);
