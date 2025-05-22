@@ -4,10 +4,10 @@ import {
   users, 
   vehicles, 
   personas, 
-  apiKeys,
-  conversationStatusEnum 
+  apiKeys 
 } from '../shared/schema';
 import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -60,9 +60,9 @@ async function seedDatabase() {
       await db.insert(users).values({
         id: adminId,
         email: 'admin@testdealership.com',
-        firstName: 'Admin',
-        lastName: 'User',
-        profileImageUrl: 'https://ui-avatars.com/api/?name=Admin+User',
+        first_name: 'Admin',
+        last_name: 'User',
+        profile_image_url: 'https://ui-avatars.com/api/?name=Admin+User',
         role: 'admin',
         dealershipId
       });
@@ -103,7 +103,6 @@ async function seedDatabase() {
       await db.insert(personas).values({
         dealershipId,
         name: 'Default Sales Assistant',
-        description: 'A helpful assistant for vehicle sales inquiries',
         isDefault: true,
         promptTemplate: `You are Rylie, an AI assistant for {{dealershipName}}. Your role is to help customers find the right vehicle for their needs and connect them with our sales team when appropriate.
 
@@ -305,7 +304,7 @@ Always remember to personalize your responses for {{customerName}}.`,
     // 6. Ensure conversation status enum exists
     console.log('Checking conversation status enum...');
     try {
-      const checkEnumQuery = new SQL`
+      const checkEnumQuery = sql`
         SELECT EXISTS (
           SELECT 1 FROM pg_type 
           WHERE typname = 'conversation_status'
@@ -316,7 +315,7 @@ Always remember to personalize your responses for {{customerName}}.`,
       
       if (!enumExists || !enumExists.rows[0] || !enumExists.rows[0].exists) {
         console.log('Creating conversation status enum...');
-        const createEnumQuery = new SQL`
+        const createEnumQuery = sql`
           CREATE TYPE conversation_status AS ENUM ('active', 'waiting', 'escalated', 'completed')
         `;
         
