@@ -34,11 +34,11 @@ async function testSetup() {
     // 2. Create admin user if it doesn't exist
     console.log('Creating admin user...');
     const adminId = '1234567890'; // Sample user ID for testing
-    const [existingAdmin] = await db.execute(sql`
+    const existingAdminResult = await db.execute(sql`
       SELECT id FROM users WHERE id = ${adminId} LIMIT 1
     `);
     
-    if (existingAdmin?.rows?.length > 0) {
+    if (existingAdminResult.rows && existingAdminResult.rows.length > 0) {
       console.log('Admin user already exists.');
     } else {
       await db.execute(sql`
@@ -50,15 +50,15 @@ async function testSetup() {
 
     // 3. Create API key if it doesn't exist
     console.log('Creating API key...');
-    const [existingApiKey] = await db.execute(sql`
+    const existingApiKeyResult = await db.execute(sql`
       SELECT key FROM api_keys WHERE dealership_id = ${dealershipId} LIMIT 1
     `);
     
     let apiKeyValue: string;
     
-    if (existingApiKey?.rows?.length > 0) {
+    if (existingApiKeyResult.rows && existingApiKeyResult.rows.length > 0) {
       console.log('API key already exists.');
-      apiKeyValue = existingApiKey.rows[0].key;
+      apiKeyValue = existingApiKeyResult.rows[0].key;
     } else {
       apiKeyValue = `key_${crypto.randomBytes(16).toString('hex')}`;
       await db.execute(sql`
@@ -70,11 +70,11 @@ async function testSetup() {
 
     // 4. Create default persona if it doesn't exist
     console.log('Creating default persona...');
-    const [existingPersona] = await db.execute(sql`
+    const existingPersonaResult = await db.execute(sql`
       SELECT id FROM personas WHERE dealership_id = ${dealershipId} LIMIT 1
     `);
     
-    if (existingPersona?.rows?.length > 0) {
+    if (existingPersonaResult.rows && existingPersonaResult.rows.length > 0) {
       console.log('Default persona already exists.');
     } else {
       const promptTemplate = `You are Rylie, an AI assistant for {{dealershipName}}. Your role is to help customers find the right vehicle for their needs and connect them with our sales team when appropriate.
@@ -121,11 +121,11 @@ Always remember to personalize your responses for {{customerName}}.`;
 
     // 5. Create sample vehicle if none exist
     console.log('Checking for vehicles...');
-    const [existingVehicles] = await db.execute(sql`
+    const existingVehiclesResult = await db.execute(sql`
       SELECT id FROM vehicles WHERE dealership_id = ${dealershipId} LIMIT 1
     `);
     
-    if (existingVehicles?.rows?.length > 0) {
+    if (existingVehiclesResult.rows && existingVehiclesResult.rows.length > 0) {
       console.log('Vehicles already exist.');
     } else {
       console.log('Creating sample vehicles...');
