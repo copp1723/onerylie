@@ -223,13 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Store the customer message
-      await storage.createMessage({
-        conversationId: conversation.id,
-        content: customerMessage,
-        isFromCustomer: true,
-        channel,
-      });
+      // We'll create the customer message later to get the message ID for A/B testing
 
       // If we should escalate based on keywords, do it immediately
       if (shouldEscalateBasedOnKeywords) {
@@ -269,12 +263,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         relevantVehicles
       };
 
-      // Generate AI response with potential handover dossier
-      const { response, shouldEscalate, reason, handoverDossier } = await generateResponse(
+      // Create message record first to get the message ID
+      const message = await storage.createMessage({
+        conversationId: conversation.id,
+        content: customerMessage,
+        isFromCustomer: true,
+        channel,
+      });
+      
+      // Generate AI response with A/B testing and potential handover dossier
+      const { 
+        response, 
+        shouldEscalate, 
+        reason, 
+        handoverDossier,
+        variantId 
+      } = await generateABTestedResponse(
         customerMessage,
         context,
         persona.promptTemplate,
-        persona.arguments as PersonaArguments
+        persona.arguments as PersonaArguments,
+        req.dealershipId!,
+        conversation,
+        message
       );
 
       // Store the AI response

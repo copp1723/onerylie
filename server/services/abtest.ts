@@ -141,8 +141,70 @@ export class ABTestService {
   }
   
   /**
-   * Retrieves performance metrics for all variants in an experiment
+   * Find metrics for a specific message
    */
+  async findMetricsForMessage(
+    variantId: number,
+    conversationId: number,
+    messageId: number
+  ): Promise<typeof promptMetrics.$inferSelect | null> {
+    try {
+      const [metric] = await db.query.promptMetrics.findMany({
+        where: and(
+          eq(promptMetrics.variantId, variantId),
+          eq(promptMetrics.conversationId, conversationId),
+          eq(promptMetrics.messageId, messageId)
+        ),
+        limit: 1
+      });
+      
+      return metric || null;
+    } catch (error) {
+      console.error('Error finding metrics for message:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Update success status for metrics
+   */
+  async updateMetricsSuccess(
+    metricId: number,
+    wasSuccessful: boolean
+  ): Promise<boolean> {
+    try {
+      await db
+        .update(promptMetrics)
+        .set({ wasSuccessful })
+        .where(eq(promptMetrics.id, metricId));
+        
+      return true;
+    } catch (error) {
+      console.error('Error updating metrics success:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Update customer rating for metrics
+   */
+  async updateMetricsRating(
+    metricId: number,
+    customerRating: number
+  ): Promise<boolean> {
+    try {
+      await db
+        .update(promptMetrics)
+        .set({ customerRating })
+        .where(eq(promptMetrics.id, metricId));
+        
+      return true;
+    } catch (error) {
+      console.error('Error updating metrics rating:', error);
+      return false;
+    }
+  }
+  
   async getExperimentResults(experimentId: number): Promise<any> {
     try {
       // Get the experiment
