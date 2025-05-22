@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import OpenAI from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 const router = Router();
 
@@ -152,14 +153,14 @@ router.post('/', async (req: Request, res: Response) => {
     } else if (openai) {
       try {
         // Use real OpenAI
-        // Need to use proper ChatCompletionMessageParam types for OpenAI SDK v4+
-        const messages = [
-          { role: "system" as const, content: processedPrompt },
+        // Build a properly typed array of ChatCompletionMessageParam
+        const messages: ChatCompletionMessageParam[] = [
+          { role: "system", content: processedPrompt },
           ...previousMessages.map(msg => ({
-            role: msg.role === "customer" ? "user" as const : "assistant" as const,
+            role: msg.role === "customer" ? "user" : "assistant",
             content: msg.content
-          })),
-          { role: "user" as const, content: customerMessage }
+          } as ChatCompletionMessageParam)),
+          { role: "user", content: customerMessage }
         ];
         
         const completion = await openai.chat.completions.create({
