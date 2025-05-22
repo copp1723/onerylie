@@ -168,6 +168,92 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).pick({
   isActive: true,
 });
 
+// A/B Testing schemas
+export const promptVariants = pgTable("prompt_variants", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  promptTemplate: text("prompt_template").notNull(),
+  isControl: boolean("is_control").default(false),
+  isActive: boolean("is_active").default(true),
+  dealershipId: integer("dealership_id").references(() => dealerships.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPromptVariantSchema = createInsertSchema(promptVariants).pick({
+  name: true,
+  description: true,
+  promptTemplate: true,
+  isControl: true,
+  isActive: true,
+  dealershipId: true,
+});
+
+export const promptMetrics = pgTable("prompt_metrics", {
+  id: serial("id").primaryKey(),
+  variantId: integer("variant_id").notNull().references(() => promptVariants.id),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  messageId: integer("message_id").notNull().references(() => messages.id),
+  responseTime: integer("response_time_ms"), // Response generation time in ms
+  tokensUsed: integer("tokens_used"), // Number of tokens used
+  customerMessageLength: integer("customer_message_length"), // Length of customer message
+  assistantResponseLength: integer("assistant_response_length"), // Length of assistant response
+  wasEscalated: boolean("was_escalated").default(false), // Whether the conversation was escalated
+  wasSuccessful: boolean("was_successful"), // Whether the prompt was considered successful (manual rating)
+  customerRating: integer("customer_rating"), // Optional customer rating (1-5)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPromptMetricsSchema = createInsertSchema(promptMetrics).pick({
+  variantId: true,
+  conversationId: true,
+  messageId: true,
+  responseTime: true,
+  tokensUsed: true,
+  customerMessageLength: true,
+  assistantResponseLength: true,
+  wasEscalated: true,
+  wasSuccessful: true,
+  customerRating: true,
+});
+
+export const promptExperiments = pgTable("prompt_experiments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  dealershipId: integer("dealership_id").references(() => dealerships.id),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  conclusionNotes: text("conclusion_notes"),
+});
+
+export const insertPromptExperimentSchema = createInsertSchema(promptExperiments).pick({
+  name: true,
+  description: true,
+  dealershipId: true,
+  startDate: true,
+  endDate: true,
+  isActive: true,
+  conclusionNotes: true,
+});
+
+export const experimentVariants = pgTable("experiment_variants", {
+  id: serial("id").primaryKey(),
+  experimentId: integer("experiment_id").notNull().references(() => promptExperiments.id),
+  variantId: integer("variant_id").notNull().references(() => promptVariants.id),
+  trafficAllocation: integer("traffic_allocation").default(50), // Percentage of traffic (0-100)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertExperimentVariantSchema = createInsertSchema(experimentVariants).pick({
+  experimentId: true,
+  variantId: true,
+  trafficAllocation: true,
+});
+
 // Relations definitions
 export const usersRelations = relations(users, ({ many }) => ({
   escalatedConversations: many(conversations),
