@@ -14,8 +14,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Separator } from "@/components/ui/separator";
-import { PlusIcon, Trash2Icon, EditIcon } from "lucide-react";
+import { PlusIcon, Trash2Icon, EditIcon, LockIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/useAuth";
 
 // Define the persona schema
 const personaSchema = z.object({
@@ -91,15 +92,18 @@ export default function Personas() {
   const [editingPersona, setEditingPersona] = useState<PersonaFormValues | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
 
   // Fetch personas for the current dealership
-  const { data: personas = [], isLoading, isError } = useQuery({
+  const { data: personas = [], isLoading: personasLoading, isError } = useQuery({
     queryKey: ['/api/personas'],
     queryFn: async () => {
       const response = await fetch('/api/personas');
       if (!response.ok) throw new Error('Failed to fetch personas');
       return response.json();
     },
+    // Only fetch if user is authenticated
+    enabled: isAuthenticated,
   });
 
   // Form for creating/editing personas
@@ -225,10 +229,36 @@ export default function Personas() {
     setIsDialogOpen(true);
   };
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-96">Loading personas...</div>;
+  // Loading state
+  if (authLoading || personasLoading) {
+    return <div className="flex items-center justify-center h-96">Loading...</div>;
   }
 
+  // Not authenticated state
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto py-6 flex flex-col items-center justify-center h-96 space-y-6">
+        <div className="flex flex-col items-center text-center space-y-4">
+          <div className="p-4 rounded-full bg-muted">
+            <LockIcon className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Authentication Required</h1>
+          <p className="text-muted-foreground max-w-md">
+            You need to log in to access the persona management system.
+          </p>
+        </div>
+        <Button 
+          size="lg" 
+          onClick={() => window.location.href = '/api/login'}
+          className="mt-4"
+        >
+          Log In to Continue
+        </Button>
+      </div>
+    );
+  }
+
+  // Error state
   if (isError) {
     return <div className="flex items-center justify-center h-96 text-red-500">Error loading personas.</div>;
   }
