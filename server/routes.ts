@@ -17,6 +17,7 @@ import personaRoutes from "./routes/persona-routes";
 import inventoryRoutes from "./routes/inventory-routes";
 import promptTestRoutes from "./routes/prompt-test";
 import { log } from "./vite";
+import purecarsRoutes from './routes/purecars-routes';
 
 // Define validation schemas
 const inboundMessageSchema = z.object({
@@ -50,10 +51,10 @@ const loginSchema = z.object({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Replit Auth for secure authentication
   await setupAuth(app);
-  
+
   // Register the prompt testing routes
   app.use('/api/prompt-test', promptTestRoutes);
-  
+
   // Authentication endpoint for getting current user info
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -79,25 +80,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create HTTP server
   const httpServer = createServer(app);
-  
+
   // Register email report routes
   app.use('/api/dealerships', emailReportRoutes);
-  
+
   // Register report trigger route
   app.use('/api/reports', reportApiRoutes);
-  
+
   // Register A/B testing routes
   app.use('/api/abtest', abtestRoutes);
-  
+
   // Register persona management routes
   app.use('/api/personas', personaRoutes);
-  
+
   // Register inventory management routes
   app.use('/api/inventory', inventoryRoutes);
-  
+
   // Register prompt testing routes
   app.use('/api/prompt-test', promptTestRoutes);
   
+  // Register PureCars routes
+  app.use('/api/purecars', purecarsRoutes);
+
   // Set up scheduled task to process email reports
   // In a production environment, this would be handled by a proper scheduler
   // For this demo, we'll check every minute if any reports are due
@@ -114,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/auth/login', async (req, res) => {
     try {
       const { username, password } = loginSchema.parse(req.body);
-      
+
       passport.authenticate('local', (err, user, info) => {
         if (err) {
           return res.status(500).json({ message: 'Authentication error' });
@@ -126,12 +130,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (err) {
             return res.status(500).json({ message: 'Login error' });
           }
-          
+
           // Store the complete user object in the session
           req.session.user = user;
           req.session.userId = user.id;
           req.session.role = user.role;
-          
+
           return res.json({ 
             id: user.id,
             username: user.username,
@@ -241,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Analyze message for vehicle intent
       const vehicleIntent = await analyzeMessageForVehicleIntent(customerMessage);
-      
+
       // Find relevant vehicles based on intent
       let relevantVehicles = [];
       if (vehicleIntent.make || vehicleIntent.model) {
@@ -273,7 +277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isFromCustomer: true,
         channel,
       });
-      
+
       // Generate AI response with A/B testing and potential handover dossier
       const { 
         response, 
@@ -302,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update conversation status if needed
       if (shouldEscalate) {
         await storage.updateConversationStatus(conversation.id, 'escalated');
-        
+
         // Handle the handover process with email if configured
         if (handoverDossier && persona.arguments && persona.arguments.handoverEmail) {
           try {
@@ -312,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               fromEmail: `rylie@${dealership.domain || 'rylie-ai.com'}`,
               dossier: handoverDossier
             });
-            
+
             console.log(`Handover dossier sent to ${persona.arguments.handoverEmail} for conversation ${conversation.id}`);
           } catch (emailError) {
             console.error('Error sending handover email:', emailError);
@@ -381,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isFromCustomer: true,
         channel: 'api',
       });
-      
+
       // Generate AI response with A/B testing and potential handover dossier
       const { 
         response, 
@@ -408,7 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             fromEmail: `rylie@${dealership.domain || 'rylie-ai.com'}`,
             dossier: handoverDossier
           });
-          
+
           console.log(`Handover dossier sent to ${persona.arguments.handoverEmail} for conversation ${conversationId}`);
         } catch (emailError) {
           console.error('Error sending handover email:', emailError);
@@ -440,10 +444,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!conversation || conversation.dealershipId !== req.dealershipId) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       // Import the handover service
       const { createAndSendHandoverDossier } = await import('./services/handover');
-      
+
       // Create a comprehensive handover dossier and send email
       const { dossier, emailSent } = await createAndSendHandoverDossier({
         conversationId,
@@ -520,7 +524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       const messages = await storage.getMessagesByConversation(conversationId);
       res.json({ conversation, messages });
     } catch (error) {
@@ -528,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: 'Server error fetching conversation details' });
     }
   });
-  
+
   // Send conversation summary via email
   const emailConversationSchema = z.object({
     conversationId: z.number(),
@@ -536,29 +540,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     emailFrom: z.string().email().optional(),
     subject: z.string().optional(),
   });
-  
+
   app.post('/api/conversations/:conversationId/email', async (req, res) => {
     try {
       const { conversationId, emailTo, emailFrom, subject } = emailConversationSchema.parse({
         ...req.body,
         conversationId: parseInt(req.params.conversationId)
       });
-      
+
       // Get conversation details
       const conversation = await storage.getConversation(conversationId);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       // Get all messages for the conversation
       const messages = await storage.getMessagesByConversation(conversationId);
-      
+
       // Get dealership information
       const dealership = await storage.getDealership(conversation.dealershipId);
       if (!dealership) {
         return res.status(404).json({ message: 'Dealership not found' });
       }
-      
+
       // Send the email
       const result = await sendConversationSummary({
         toEmail: emailTo,
@@ -567,7 +571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages,
         dealershipName: dealership.name
       });
-      
+
       if (result) {
         // Log email sending activity
         await storage.createMessage({
@@ -576,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isFromCustomer: false,
           channel: 'system',
         });
-        
+
         return res.json({ success: true, message: `Conversation summary sent to ${emailTo}` });
       } else {
         return res.status(500).json({ message: 'Failed to send email' });
@@ -619,13 +623,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const dealershipId = parseInt(req.params.dealershipId);
       const apiKeys = await storage.getApiKeysByDealership(dealershipId);
-      
+
       // Mask the actual key values for security
       const maskedKeys = apiKeys.map(key => ({
         ...key,
         key: `${key.key.substring(0, 8)}...${key.key.substring(key.key.length - 4)}`
       }));
-      
+
       res.json(maskedKeys);
     } catch (error) {
       console.error('Error fetching API keys:', error);
@@ -638,7 +642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const dealershipId = parseInt(req.params.dealershipId);
       const { description } = req.body;
-      
+
       const apiKey = await storage.generateApiKey(dealershipId, description);
       res.json(apiKey);
     } catch (error) {
