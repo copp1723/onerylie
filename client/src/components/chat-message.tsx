@@ -72,15 +72,10 @@ export function ChatMessage({ message, isCustomer }: ChatMessageProps) {
         {isCustomer ? (
           <div className="whitespace-pre-wrap text-sm">{message}</div>
         ) : (
-          <div className="text-sm space-y-4">
+          <div className="text-sm space-y-4 whitespace-pre-line">
             {formatMessage(message).paragraphs.map((paragraph, i) => (
               <p key={i} className="leading-relaxed">
-                {paragraph.split('\n').map((line, j) => (
-                  <span key={j}>
-                    {line}
-                    {j < paragraph.split('\n').length - 1 && <br />}
-                  </span>
-                ))}
+                {paragraph}
               </p>
             ))}
           </div>

@@ -1,0 +1,87 @@
+Dev Ticket — Preserve Paragraph Spacing in Prompt-Test Replies
+
+Field	Details
+Title	Keep new-line breaks in Rylie AI responses
+ID	UI-CHAT-014
+Priority	P2 – UX polish
+Severity	Minor (message still readable, just cramped)
+Owner	frontend-web squad
+Date Opened	2025-05-22
+Tags	react, markdown, whitespace, chat-ui
+
+
+⸻
+
+Problem
+
+Assistant replies returned by /api/prompt-test are rendered in the chat bubble as one long paragraph. New-line characters sent by the API are collapsed because the bubble uses the default CSS rule white-space: normal.
+
+Desired output (“blank-line paragraph spacing”):
+
+Rylie AI
+
+Great! Trading in your vehicle is a smart way to make your next purchase more affordable. 
+
+To find out the value of your 2020 F-150, you can use our trade-in valuation tool here: https://southsidemotors.com/trade-in-value. This will give you an estimate based on current market conditions. 
+
+If you need further assistance or have questions, feel free to ask!
+
+
+⸻
+
+Root Cause
+	•	The API is already returning \n\n between paragraphs (confirmed via network tab).
+	•	React component <ChatMessage> renders the text inside a normal <div> (or <p>), so consecutive line breaks collapse per HTML spec.
+
+⸻
+
+Fix Options (pick one, or combine)
+
+Option	Detail	Effort	Pros / Cons
+A. CSS white-space: pre-line	In ChatMessage.module.css:white-space: pre-line;	5 min	✅ Fast, no JS changes.⚠️ Preserves all line breaks; long single lines wrap but tabs are honoured.
+B. Convert \n ⇒ <br>	Utility: text.replace(/\n/g, '<br />') and render with dangerouslySetInnerHTML.	15 min	✅ Fine-grained control.⚠️ Requires XSS-safe handling / sanitisation.
+C. Render with Markdown	Already using react-markdown elsewhere; wrap content in <ReactMarkdown> (it treats blank lines as paragraphs).	30 min	✅ Supports bold, links, etc.⚠️ Adds parse cost; need remark-gfm for tables.
+
+Recommendation: Option A (CSS) is enough for spacing and link display.
+
+⸻
+
+Implementation Steps
+	1.	Add/Update CSS
+
+/* src/components/ChatMessage.module.css */
+.assistantText {
+  white-space: pre-line;      /* ← preserves \n */
+}
+
+
+	2.	Apply class
+
+// ChatMessage.tsx
+import styles from './ChatMessage.module.css';
+
+export default function ChatMessage({ message }) {
+  return (
+    <div className={styles.assistantText}>
+      {message.content}
+    </div>
+  );
+}
+
+
+	3.	Verify in Vite dev server and deployed preview.
+
+⸻
+
+Acceptance Criteria
+	•	Assistant messages display each \n\n as a blank line between paragraphs.
+	•	Links remain clickable and unbroken (Markdown renders [text](url) automatically; plain URLs remain plain).
+	•	No horizontal scroll introduced.
+
+⸻
+
+QA Notes
+
+Use the same prompt (“Great! Trading in…”) in prompt-test UI; confirm visual layout matches spec screenshot in ticket comment.
+
+If further rich formatting (bold, bullets) is needed later, revisit Option C (Markdown render).
