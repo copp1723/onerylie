@@ -10,6 +10,7 @@ import type {
   InsertHandoverDossier
 } from '@shared/schema';
 import { sendEmail } from './email';
+import { DEFAULT_SYSTEM_PROMPT } from './system-prompts/default';
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -164,13 +165,27 @@ async function generateConversationSummary(conversationId: number): Promise<stri
     content: msg.content
   }));
 
-  // Use OpenAI to generate summary
+  // Use OpenAI to generate summary with our centralized system prompt
+  // We'll extract the summarization instructions from the default prompt
+  // and customize it for the handover summary task
+  const summarySystemPrompt = `${DEFAULT_SYSTEM_PROMPT.split('\n\n')[0]}
+  
+  Your task is to summarize this customer conversation in 2-3 paragraphs.
+  Focus specifically on:
+  1. The customer's automotive needs and preferences
+  2. Their current situation and pain points
+  3. Why they need human sales assistance
+  4. Any specific vehicles they've shown interest in
+  5. Urgency level and timeline for purchase
+  
+  Keep the summary concise, informative, and actionable for a sales representative.`;
+  
   const response = await openai.chat.completions.create({
     model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
     messages: [
       {
         role: "system",
-        content: "Summarize this customer conversation in 2-3 paragraphs, focusing on the customer's needs, interests, and why they need human assistance."
+        content: summarySystemPrompt
       },
       ...formattedHistory
     ],
@@ -210,19 +225,32 @@ async function suggestApproach(conversationId: number, customerInsights: Custome
     `${v.year || 'Unknown year'} ${v.make || 'Unknown make'} ${v.model || 'Unknown model'} ${v.trim || ''} (confidence: ${v.confidence})`
   ).join('\n');
 
-  // Use OpenAI to suggest approach
+  // Use OpenAI to suggest approach with our centralized system prompt
+  const approachSystemPrompt = `${DEFAULT_SYSTEM_PROMPT.split('\n\n')[0]}
+  
+  Your task is to help salespeople prepare for customer interactions. 
+  Based on the conversation and insights, suggest a personalized approach for 
+  the sales representative to take with this customer.
+  
+  Customer Insights:
+  ${formattedInsights}
+  
+  Vehicle Interests:
+  ${formattedVehicleInterests}
+  
+  Create a brief, action-oriented approach that includes:
+  1. A personalized greeting strategy
+  2. Specific talking points based on customer needs
+  3. Which vehicles to highlight and why
+  4. Questions to ask to further understand their needs
+  5. Next steps to suggest (test drive, financing options, etc.)`;
+  
   const response = await openai.chat.completions.create({
     model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
     messages: [
       {
         role: "system",
-        content: `You are an AI that helps salespeople prepare for customer interactions. Based on the conversation and insights, suggest a personalized approach for the sales representative to take with this customer.
-        
-        Customer Insights:
-        ${formattedInsights}
-        
-        Vehicle Interests:
-        ${formattedVehicleInterests}`
+        content: approachSystemPrompt
       },
       ...formattedHistory,
       {
