@@ -48,6 +48,9 @@
 - [x] Ensure proper error handling for production
 - [x] Implement database performance optimizations
 - [x] Configure structured error reporting
+- [x] Set up Redis queue with in-memory fallback for resilience
+- [x] Add active field to dealership schema for activation status
+- [x] Implement email reporting scheduler integration
 
 ## Deployment Settings
 - [x] Set deployment build command to `npm run build`
