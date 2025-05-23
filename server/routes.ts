@@ -466,6 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 3. Handover endpoint - escalate to human with comprehensive dossier
   app.post('/api/handover', apiKeyAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
+      console.log('Handover request received:', req.body);
       const { conversationId, reason, assignToUserId } = handoverSchema.parse(req.body);
 
       // Verify the conversation belongs to this dealership
@@ -474,44 +475,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Conversation not found' });
       }
 
+      // Get dealership (for email notifications)
+      const dealership = await storage.getDealership(req.dealershipId!);
+      if (!dealership) {
+        return res.status(404).json({ message: 'Dealership not found' });
+      }
+
       // Import the handover service
       const { createAndSendHandoverDossier } = await import('./services/handover');
 
-      // Create a comprehensive handover dossier and send email
-      const { dossier, emailSent } = await createAndSendHandoverDossier({
-        conversationId,
-        dealershipId: req.dealershipId!,
-        customerName: conversation.customerName,
-        customerContact: conversation.customerPhone || conversation.customerEmail,
-        escalationReason: reason || 'Customer requested human assistance'
-      });
+      try {
+        // Create a comprehensive handover dossier and send email
+        const { dossier, emailSent } = await createAndSendHandoverDossier({
+          conversationId,
+          dealershipId: req.dealershipId!,
+          customerName: conversation.customerName,
+          customerContact: conversation.customerPhone || conversation.customerEmail || 'Not provided',
+          escalationReason: reason || 'Customer requested human assistance'
+        });
 
-      // Escalate the conversation
-      const updatedConversation = await storage.escalateConversation(
-        conversationId, 
-        assignToUserId || 0
-      );
+        // Escalate the conversation
+        const updatedConversation = await storage.escalateConversation(
+          conversationId, 
+          assignToUserId || 0
+        );
 
-      // Add system message about escalation
-      await storage.createMessage({
-        conversationId,
-        content: `Conversation escalated to human support. Reason: ${reason || 'Not specified'}`,
-        isFromCustomer: false,
-        channel: 'system',
-        metadata: { reason, escalatedBy: req.apiKey }
-      });
-
-      return res.json({
-        success: true,
-        conversation: updatedConversation,
-        dossier: {
-          id: dossier.id,
-          customerName: dossier.customerName,
-          conversationSummary: dossier.conversationSummary,
-          urgency: dossier.urgency,
-          emailSent
-        }
-      });
+        // Add system message about escalation
+        await storage.createMessage({
+          conversationId,
+          content: `Conversation escalated to human support. Reason: ${reason || 'Not specified'}`,
+          isFromCustomer: false,
+          channel: 'system',
+          metadata: { reason, escalatedBy: req.apiKey }
+        });
+        
+        return res.json({
+          success: true,
+          conversation: updatedConversation,
+          dossier: {
+            id: dossier.id,
+            customerName: dossier.customerName,
+            conversationSummary: dossier.conversationSummary,
+            urgency: dossier.urgency,
+            emailSent
+          }
+        });
+      } catch (innerError) {
+        console.error('Error in handover process:', innerError);
+        return res.status(500).json({ 
+          message: 'Error generating handover dossier', 
+          error: innerError instanceof Error ? innerError.message : String(innerError)
+        });
+      }
     } catch (error) {
       console.error('Error handling handover:', error);
       if (error instanceof z.ZodError) {
