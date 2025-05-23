@@ -5,6 +5,8 @@ import { apiLimiter } from "./middleware/rate-limit";
 import logger from "./utils/logger";
 import csrf from "csurf";
 import cookieParser from "cookie-parser";
+import monitoringRoutes from './routes/monitoring-routes';
+import { monitoring } from './services/monitoring';
 
 const app = express();
 app.use(express.json());
@@ -20,15 +22,15 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
+
   // Only apply HSTS in production
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
-  
+
   // Content Security Policy
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;");
-  
+
   next();
 });
 
@@ -55,7 +57,7 @@ app.use((req, res, next) => {
         ip: req.ip,
         userAgent: req.get('user-agent')
       };
-      
+
       // Add response data to logs for non-success status codes or in development
       if (res.statusCode >= 400 || process.env.NODE_ENV !== 'production') {
         if (capturedJsonResponse) {
@@ -77,19 +79,32 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add monitoring routes before other routes
+app.use('/api/metrics', monitoringRoutes);
+
+// Track all requests
+app.use((req, res, next) => {
+  const start = performance.now();
+  res.on('finish', () => {
+    const duration = performance.now() - start;
+    monitoring.trackRequest(req.path, duration, res.statusCode);
+  });
+  next();
+});
+
 (async () => {
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    
+
     // In production, don't expose detailed error messages
     const isProduction = process.env.NODE_ENV === 'production';
     const responseMessage = isProduction && status === 500 
       ? 'An unexpected error occurred. Our team has been notified.'
       : message;
-    
+
     // Log the full error details for debugging
     if (status >= 500) {
       console.error(`[ERROR] ${new Date().toISOString()} - ${err.stack || err}`);
@@ -102,7 +117,7 @@ app.use((req, res, next) => {
       success: false,
       code: isProduction ? undefined : err.code
     });
-    
+
     // Only re-throw in development for better debugging
     if (!isProduction) {
       throw err;
@@ -119,18 +134,18 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on port 5000
-  
+
   // Implement graceful shutdown for production scaling
   const handleShutdown = () => {
     console.log('Shutting down application gracefully...');
-    
+
     // Import necessary shutdown functions
     Promise.all([
       import('./db').then(({ closeDbConnections }) => closeDbConnections()),
       import('./utils/cache').then(({ shutdownCache }) => shutdownCache())
     ]).then(() => {
       console.log('All resources released, shutting down cleanly');
-      
+
       // Close HTTP server with a timeout
       server.close((err) => {
         if (err) {
@@ -144,18 +159,18 @@ app.use((req, res, next) => {
       console.error('Error during resource cleanup:', err);
       process.exit(1);
     });
-    
+
     // Force shutdown after 10 seconds if graceful shutdown fails
     setTimeout(() => {
       console.error('Forced shutdown after timeout');
       process.exit(1);
     }, 10000);
   };
-  
+
   // Setup signal handlers for graceful shutdown
   process.on('SIGTERM', handleShutdown);
   process.on('SIGINT', handleShutdown);
-  
+
   // Add cache statistics to health endpoint
   app.get('/api/health/cache', async (req, res) => {
     const { getCacheStats } = await import('./utils/cache');

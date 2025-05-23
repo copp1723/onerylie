@@ -13,6 +13,7 @@ import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import ProtectedPromptTesting from "@/pages/protected-prompt-testing";
 import SimplePromptTesting from "@/pages/simple-prompt-testing";
+import { MonitoringDashboard } from './components/monitoring-dashboard';
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/prompt-testing" component={ProtectedPromptTesting} />
       <Route path="/simple-prompt-testing" component={SimplePromptTesting} />
+      <Route path="/monitoring" component={MonitoringDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
