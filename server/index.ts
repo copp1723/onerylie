@@ -3,13 +3,34 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { apiLimiter } from "./middleware/rate-limit";
 import logger from "./utils/logger";
+import csrf from "csurf";
+import cookieParser from "cookie-parser";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser(process.env.SESSION_SECRET || 'rylie-secure-secret'));
 
 // Apply rate limiting to API routes
 app.use('/api', apiLimiter);
+
+// Security headers
+app.use((req, res, next) => {
+  // Security headers for enterprise-level protection
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Only apply HSTS in production
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  
+  // Content Security Policy
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;");
+  
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -103,25 +124,25 @@ app.use((req, res, next) => {
   const handleShutdown = () => {
     console.log('Shutting down application gracefully...');
     
-    // Import the closeDbConnections function from db.ts
-    import('./db').then(({ closeDbConnections }) => {
-      // Close database connections
-      closeDbConnections().then(() => {
-        console.log('All connections closed, shutting down');
+    // Import necessary shutdown functions
+    Promise.all([
+      import('./db').then(({ closeDbConnections }) => closeDbConnections()),
+      import('./utils/cache').then(({ shutdownCache }) => shutdownCache())
+    ]).then(() => {
+      console.log('All resources released, shutting down cleanly');
+      
+      // Close HTTP server with a timeout
+      server.close((err) => {
+        if (err) {
+          console.error('Error closing HTTP server:', err);
+          return;
+        }
+        console.log('HTTP server closed successfully');
         process.exit(0);
-      }).catch((err) => {
-        console.error('Error during shutdown:', err);
-        process.exit(1);
       });
-    });
-    
-    // Close HTTP server with a timeout
-    server.close((err) => {
-      if (err) {
-        console.error('Error closing HTTP server:', err);
-        return;
-      }
-      console.log('HTTP server closed successfully');
+    }).catch((err) => {
+      console.error('Error during resource cleanup:', err);
+      process.exit(1);
     });
     
     // Force shutdown after 10 seconds if graceful shutdown fails
@@ -134,6 +155,12 @@ app.use((req, res, next) => {
   // Setup signal handlers for graceful shutdown
   process.on('SIGTERM', handleShutdown);
   process.on('SIGINT', handleShutdown);
+  
+  // Add cache statistics to health endpoint
+  app.get('/api/health/cache', async (req, res) => {
+    const { getCacheStats } = await import('./utils/cache');
+    res.json(getCacheStats());
+  });
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
