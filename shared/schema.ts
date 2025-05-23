@@ -33,6 +33,10 @@ export const users = pgTable("users", {
   password: text("password"),
   role: text("role").notNull().default("user"),
   dealershipId: integer("dealership_id").references(() => dealerships.id),
+  isVerified: boolean("is_verified").default(false),
+  verificationToken: text("verification_token"),
+  resetToken: text("reset_token"),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 

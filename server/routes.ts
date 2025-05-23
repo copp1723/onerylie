@@ -1,4 +1,5 @@
 import express, { type Express, Request, Response } from "express";
+import authRoutes from './routes/auth-routes';
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
@@ -79,6 +80,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Setup Replit Auth for secure authentication
   await setupAuth(app);
+  
+  // Register auth routes
+  app.use('/api/auth', authRoutes);
 
   // Register the prompt testing routes
   app.use('/api/prompt-test', promptTestRoutes);

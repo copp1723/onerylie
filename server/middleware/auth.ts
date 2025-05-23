@@ -69,15 +69,42 @@ export function sessionAuth(
   next();
 }
 
-// Middleware for admin-only routes
-export function adminOnly(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  if (!req.session || !req.session.role !== "admin") {
+// Role-based access control middleware
+export function requireRole(roles: string | string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = await storage.getUser(req.session?.userId);
+    
+    if (!user || !user.isVerified) {
+      return res.status(403).json({
+        message: "Please verify your email first",
+      });
+    }
+
+    const allowedRoles = Array.isArray(roles) ? roles : [roles];
+    
+    if (!allowedRoles.includes(user.role)) {
+      return res.status(403).json({
+        message: `Access denied: Required role(s): ${allowedRoles.join(', ')}`,
+      });
+    }
+
+    next();
+  };
+}
+
+// Admin only middleware (shorthand)
+export const adminOnly = requireRole('admin');
+
+// Manager only middleware
+export const managerOnly = requireRole(['admin', 'manager']);
+
+// Verified user middleware
+export function requireVerified(req: Request, res: Response, next: NextFunction) {
+  const user = req.user as any;
+  
+  if (!user || !user.isVerified) {
     return res.status(403).json({
-      message: "Access denied: Admin privileges required",
+      message: "Please verify your email first",
     });
   }
 
