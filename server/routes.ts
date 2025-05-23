@@ -49,6 +49,34 @@ const loginSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint for monitoring
+  app.get('/api/health', async (req, res) => {
+    try {
+      // Check database connection
+      await db.execute('SELECT 1');
+      
+      // Return system health information
+      res.json({
+        status: 'healthy',
+        version: process.env.npm_package_version || '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString(),
+        services: {
+          database: 'connected',
+          openai: process.env.OPENAI_API_KEY ? 'configured' : 'not_configured',
+          sendgrid: process.env.SENDGRID_API_KEY ? 'configured' : 'not_configured'
+        }
+      });
+    } catch (error) {
+      console.error('Health check failed:', error);
+      res.status(500).json({ 
+        status: 'unhealthy',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // Setup Replit Auth for secure authentication
   await setupAuth(app);
 

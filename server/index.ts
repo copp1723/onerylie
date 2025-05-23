@@ -98,6 +98,42 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on port 5000
+  
+  // Implement graceful shutdown for production scaling
+  const handleShutdown = () => {
+    console.log('Shutting down application gracefully...');
+    
+    // Import the closeDbConnections function from db.ts
+    import('./db').then(({ closeDbConnections }) => {
+      // Close database connections
+      closeDbConnections().then(() => {
+        console.log('All connections closed, shutting down');
+        process.exit(0);
+      }).catch((err) => {
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+      });
+    });
+    
+    // Close HTTP server with a timeout
+    server.close((err) => {
+      if (err) {
+        console.error('Error closing HTTP server:', err);
+        return;
+      }
+      console.log('HTTP server closed successfully');
+    });
+    
+    // Force shutdown after 10 seconds if graceful shutdown fails
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+  
+  // Setup signal handlers for graceful shutdown
+  process.on('SIGTERM', handleShutdown);
+  process.on('SIGINT', handleShutdown);
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
