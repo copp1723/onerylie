@@ -2,18 +2,18 @@
  * Unit tests for the cache utility
  */
 import { 
-  initializeCache, 
   getFromCache, 
   setInCache, 
-  deleteFromCache, 
-  clearCache,
-  getCacheStats 
+  removeFromCache, 
+  clearAllCache,
+  getCacheStats,
+  clearNamespaceCache
 } from '../../server/utils/cache';
 
 describe('Cache Utility', () => {
   beforeEach(() => {
     // Reset the cache before each test
-    clearCache();
+    clearAllCache();
   });
 
   test('should store and retrieve values', () => {
@@ -44,7 +44,7 @@ describe('Cache Utility', () => {
     return new Promise(resolve => {
       setTimeout(() => {
         // Should be gone after expiration
-        expect(getFromCache(key)).toBeUndefined();
+        expect(getFromCache(key)).toBeNull();
         resolve(true);
       }, 20);
     });
@@ -57,10 +57,10 @@ describe('Cache Utility', () => {
     
     // Act
     setInCache(key, value);
-    deleteFromCache(key);
+    removeFromCache(key);
     
     // Assert
-    expect(getFromCache(key)).toBeUndefined();
+    expect(getFromCache(key)).toBeNull();
   });
 
   test('should use namespaces correctly', () => {
@@ -78,8 +78,8 @@ describe('Cache Utility', () => {
     expect(getFromCache(key, 'ns2')).toEqual(value2);
     
     // Deleting from one namespace doesn't affect the other
-    deleteFromCache(key, 'ns1');
-    expect(getFromCache(key, 'ns1')).toBeUndefined();
+    removeFromCache(key, 'ns1');
+    expect(getFromCache(key, 'ns1')).toBeNull();
     expect(getFromCache(key, 'ns2')).toEqual(value2);
   });
 
@@ -93,11 +93,11 @@ describe('Cache Utility', () => {
     const stats = getCacheStats();
     
     // Assert
-    expect(stats).toHaveProperty('totalItems');
-    expect(stats.totalItems).toBe(3);
-    expect(stats).toHaveProperty('namespaces');
-    expect(stats).toHaveProperty('memoryUsageEstimate');
-    expect(stats.memoryUsageEstimate).toBeGreaterThan(0);
+    expect(stats).toHaveProperty('size');
+    expect(stats.size).toBe(3);
+    expect(stats).toHaveProperty('hits');
+    expect(stats).toHaveProperty('misses');
+    expect(stats).toHaveProperty('hitRate');
   });
 
   test('should clear all cache contents', () => {
@@ -106,11 +106,27 @@ describe('Cache Utility', () => {
     setInCache('clear-test-2', 'value2', undefined, 'custom-ns');
     
     // Act
-    clearCache();
+    clearAllCache();
     
     // Assert
-    expect(getFromCache('clear-test-1')).toBeUndefined();
-    expect(getFromCache('clear-test-2', 'custom-ns')).toBeUndefined();
-    expect(getCacheStats().totalItems).toBe(0);
+    expect(getFromCache('clear-test-1')).toBeNull();
+    expect(getFromCache('clear-test-2', 'custom-ns')).toBeNull();
+    expect(getCacheStats().size).toBe(0);
+  });
+  
+  test('should clear namespace contents', () => {
+    // Arrange
+    setInCache('ns-test-1', 'value1', undefined, 'test-ns');
+    setInCache('ns-test-2', 'value2', undefined, 'test-ns');
+    setInCache('regular-key', 'value3'); // Not in namespace
+    
+    // Act
+    const clearedCount = clearNamespaceCache('test-ns');
+    
+    // Assert
+    expect(clearedCount).toBe(2);
+    expect(getFromCache('ns-test-1', 'test-ns')).toBeNull();
+    expect(getFromCache('ns-test-2', 'test-ns')).toBeNull();
+    expect(getFromCache('regular-key')).toEqual('value3'); // Should still exist
   });
 });
