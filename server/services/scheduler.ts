@@ -71,7 +71,11 @@ export function getScheduledReports(dealershipId: number): EmailScheduleSettings
  * Check if any reports are due to be sent and send them
  * This function would be called by a cron job or scheduler in a production environment
  */
+import { queueReportGeneration } from './queue';
+
 export async function processScheduledReports(): Promise<void> {
+  // Queue report generation instead of processing directly
+  await queueReportGeneration(settings);
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();

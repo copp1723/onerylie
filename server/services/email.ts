@@ -31,10 +31,15 @@ interface EmailParams {
  * @param params Email parameters (to, from, subject, text/html)
  * @returns Success status
  */
+import { queueEmail } from './queue';
+
 export async function sendEmail(
   apiKey: string,
   params: EmailParams
 ): Promise<boolean> {
+  // Queue the email instead of sending directly
+  await queueEmail(apiKey, params);
+  return true;
   try {
     // If no API key was provided or available, log but don't fail
     if (!apiKey && !process.env.SENDGRID_API_KEY) {
