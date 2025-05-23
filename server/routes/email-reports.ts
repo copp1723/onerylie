@@ -49,7 +49,9 @@ router.post('/:dealershipId/reports/schedule', apiKeyAuth, async (req: Authentic
     // Create the schedule
     const scheduleId = scheduleEmailReport({
       ...scheduleSettings,
-      dealershipId
+      dealershipId,
+      reportType: 'conversation_summary',
+      enabled: true
     });
     
     return res.status(201).json({
