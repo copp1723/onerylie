@@ -1,7 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { apiLimiter } from "./middleware/rate-limit";
+import { apiLimiter, authLimiter, aiLimiter } from './middleware/rate-limit';
+import { dynamicRateLimiter, premiumFeatureLimiter } from './middleware/tiered-rate-limit';
 import logger from "./utils/logger";
 import csrf from "csurf";
 import cookieParser from "cookie-parser";
