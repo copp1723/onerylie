@@ -240,9 +240,7 @@ async function main() {
   }
 }
 
-// Run the test if this script is executed directly
-if (require.main === module) {
-  main();
-}
+// Run the test directly
+main();
 
 export { testInventoryImport };
