@@ -150,8 +150,13 @@ export class DatabaseStorage implements IStorage {
   
   // Dealership operations
   async getDealership(id: number): Promise<Dealership | undefined> {
-    const [dealership] = await db.select().from(dealerships).where(eq(dealerships.id, id));
-    return dealership;
+    try {
+      const [dealership] = await db.select().from(dealerships).where(eq(dealerships.id, id));
+      return dealership;
+    } catch (error) {
+      console.error('Error fetching dealership:', error);
+      return undefined;
+    }
   }
   
   async getDealerships(): Promise<Dealership[]> {
