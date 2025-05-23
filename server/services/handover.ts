@@ -495,11 +495,46 @@ export async function createAndSendHandoverDossier(input: HandoverDossierInput):
   dossier: HandoverDossier;
   emailSent: boolean;
 }> {
-  const dossier = await createHandoverDossier(input);
-  const emailSent = await sendHandoverDossierEmail(dossier);
+  // Ensure we have a valid reason, default if not provided
+  if (!input.escalationReason) {
+    input.escalationReason = 'Handover requested by system';
+  }
   
-  return {
-    dossier,
-    emailSent
-  };
+  try {
+    const dossier = await createHandoverDossier(input);
+    
+    // Only attempt to send an email if we have a valid dossier
+    let emailSent = false;
+    if (dossier && dossier.id) {
+      emailSent = await sendHandoverDossierEmail(dossier);
+    }
+    
+    return {
+      dossier,
+      emailSent
+    };
+  } catch (error) {
+    console.error('Error in handover process:', error);
+    // If something fails, create a minimal dossier with the available information
+    const fallbackDossier: any = {
+      id: -1,
+      conversationId: input.conversationId,
+      dealershipId: input.dealershipId,
+      customerName: input.customerName || 'Unknown',
+      customerContact: input.customerContact || 'Not provided',
+      conversationSummary: 'Error generating summary',
+      customerInsights: [],
+      vehicleInterests: [],
+      suggestedApproach: 'Please review the conversation history',
+      urgency: 'high',
+      escalationReason: input.escalationReason,
+      fullConversationHistory: [],
+      isEmailSent: false
+    };
+    
+    return {
+      dossier: fallbackDossier,
+      emailSent: false
+    };
+  }
 }
