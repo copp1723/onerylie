@@ -2,6 +2,7 @@ import { db } from "../server/db";
 import { users, sessions } from "../shared/schema";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
+import { sql } from "drizzle-orm";
 
 /**
  * This script ensures the required authentication tables exist in the database
@@ -19,14 +20,14 @@ async function setupAuthDatabase() {
     const result = await db.query.sessions.findFirst();
     if (!result) {
       console.log("Sessions table not found, creating it...");
-      await db.execute(`
+      await db.execute(sql`
         CREATE TABLE IF NOT EXISTS sessions (
           sid TEXT PRIMARY KEY,
           sess JSONB NOT NULL,
           expire TIMESTAMP NOT NULL
         )
       `);
-      await db.execute(`
+      await db.execute(sql`
         CREATE INDEX IF NOT EXISTS IDX_session_expire ON sessions (expire)
       `);
       console.log("Sessions table created successfully");
