@@ -1,506 +1,394 @@
 /**
- * Email Service
+ * Email Service for Rylie AI platform
  * 
- * This service handles sending emails via SendGrid
+ * This module provides email functionality using SendGrid with a fallback
+ * mechanism for when SendGrid is unavailable
  */
-
 import { MailService } from '@sendgrid/mail';
+import logger from '../utils/logger';
+import { addEmailJob } from './queue';
 
-// Initialize mail service if API key is available
+// Initialize SendGrid if API key is available
 let mailService: MailService | null = null;
-if (process.env.SENDGRID_API_KEY) {
-  mailService = new MailService();
-  mailService.setApiKey(process.env.SENDGRID_API_KEY);
+
+try {
+  if (process.env.SENDGRID_API_KEY) {
+    mailService = new MailService();
+    mailService.setApiKey(process.env.SENDGRID_API_KEY);
+    logger.info('SendGrid email service initialized');
+  } else {
+    logger.warn('SendGrid API key not provided, emails will be logged only');
+  }
+} catch (error) {
+  logger.error('Failed to initialize SendGrid', error);
 }
 
-// Email parameters interface
-interface EmailParams {
-  to: string;
-  from: string;
-  subject: string;
-  text?: string;
-  html?: string;
-}
+// Default sender configuration
+const DEFAULT_FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL || 'noreply@rylie.ai';
+const DEFAULT_FROM_NAME = process.env.DEFAULT_FROM_NAME || 'Rylie AI';
 
 /**
- * Send an email using SendGrid
- * Ensures both text and html are present in the final email
- * Includes a fallback mechanism for deployment readiness
- * 
- * @param apiKey SendGrid API key
- * @param params Email parameters (to, from, subject, text/html)
- * @returns Success status
+ * Queue an email to be sent asynchronously
+ * @param type Email job type
+ * @param data Email data
  */
-import { queueEmail } from './queue';
+export const queueEmail = async (type: string, data: any): Promise<string> => {
+  return await addEmailJob({ type, data });
+};
 
-export async function sendEmail(
-  apiKey: string,
-  params: EmailParams
-): Promise<boolean> {
-  // Queue the email instead of sending directly
-  await queueEmail(apiKey, params);
-  return true;
+/**
+ * Send an email directly using SendGrid
+ * @param to Recipient email address
+ * @param subject Email subject
+ * @param text Plain text email content
+ * @param html HTML email content (optional)
+ * @param from Sender email address (defaults to configured default)
+ */
+export const sendEmail = async (
+  to: string,
+  subject: string,
+  text: string,
+  html?: string,
+  from: string = `${DEFAULT_FROM_NAME} <${DEFAULT_FROM_EMAIL}>`
+): Promise<boolean> => {
   try {
-    // If no API key was provided or available, log but don't fail
-    if (!apiKey && !process.env.SENDGRID_API_KEY) {
-      console.log('No SendGrid API key available, email would have been sent to:', params.to);
-      console.log('Subject:', params.subject);
-      console.log('Content:', params.html || params.text);
-      return true;
-    }
-    
-    // Use the provided API key or the one from environment
-    if (apiKey && (!mailService || process.env.SENDGRID_API_KEY !== apiKey)) {
-      mailService = new MailService();
-      mailService.setApiKey(apiKey);
-    }
-    
-    if (!mailService) {
-      console.error('Mail service not initialized');
-      logEmailToFallbackSystem(params);
-      return false;
-    }
-    
-    // Ensure we have both text and html content for the email
-    const textContent = params.text || 'This email contains HTML content. Please use an HTML-compatible email client to view it properly.';
-    const htmlContent = params.html || '<p>' + (params.text || 'Email content not available') + '</p>';
-    
-    try {
-      // Send the email
+    if (mailService && process.env.SENDGRID_API_KEY) {
       await mailService.send({
-        to: params.to,
-        from: params.from,
-        subject: params.subject,
-        text: textContent,
-        html: htmlContent
+        to,
+        from,
+        subject,
+        text,
+        html: html || text
       });
       
+      logger.info('Email sent successfully', { to, subject });
       return true;
-    } catch (sendError) {
-      console.error('SendGrid email error:', sendError);
-      
-      // Use fallback mechanism for deployment readiness
-      const isProduction = process.env.NODE_ENV === 'production';
-      if (isProduction) {
-        // In production, log the email for manual processing if needed
-        logEmailToFallbackSystem(params);
-        return true; // Return true so application flow isn't interrupted in production
-      }
-      
-      return false;
-    }
-  } catch (error) {
-    console.error('Email service error:', error);
-    logEmailToFallbackSystem(params);
-    return false;
-  }
-}
-
-/**
- * Fallback mechanism for email delivery
- * Logs email details for manual processing if SendGrid is unavailable
- * 
- * @param params Email parameters
- */
-function logEmailToFallbackSystem(params: EmailParams): void {
-  const timestamp = new Date().toISOString();
-  const logEntry = {
-    timestamp,
-    to: params.to,
-    from: params.from,
-    subject: params.subject,
-    textContent: params.text || '',
-    htmlContent: params.html || '',
-  };
-  
-  // Log to console in structured format for easier parsing
-  console.log('EMAIL_FALLBACK_LOG:', JSON.stringify(logEntry));
-  
-  // In a real production system, this could:
-  // 1. Write to a specific log file for manual processing
-  // 2. Add to a database queue for retry
-  // 3. Call a secondary email service provider
-  // 4. Trigger an alert to operations team
-}
-
-/**
- * Send an inventory update confirmation email
- * 
- * @param to Recipient email address
- * @param subject Email subject
- * @param results Processing results to include in email
- * @returns Success status
- */
-export async function sendInventoryUpdateEmail(
-  to: string,
-  subject: string,
-  results: any
-): Promise<boolean> {
-  try {
-    const from = 'inventory@rylie-ai.com';
-    const html = `
-      <h2>Inventory Update Processed</h2>
-      <p>Your inventory file has been processed.</p>
-      
-      <h3>Processing Results:</h3>
-      <ul>
-        <li><strong>Total vehicles processed:</strong> ${results.totalProcessed || 0}</li>
-        <li><strong>New vehicles added:</strong> ${results.added || 0}</li>
-        <li><strong>Existing vehicles updated:</strong> ${results.updated || 0}</li>
-        ${results.errors && results.errors.length > 0 ? 
-          `<li><strong>Errors encountered:</strong> ${results.errors.length}</li>` : 
-          ''
-        }
-      </ul>
-      
-      ${results.errors && results.errors.length > 0 ? `
-        <h3>Error Details:</h3>
-        <ul>
-          ${results.errors.map((err: any) => `<li>${err}</li>`).join('')}
-        </ul>
-      ` : ''}
-      
-      <p>If you have any questions or concerns about this inventory update, please contact your Rylie AI representative.</p>
-    `;
-    
-    // Generate a plain text version
-    const text = `
-      Inventory Update Processed
-      
-      Your inventory file has been processed.
-      
-      Processing Results:
-      - Total vehicles processed: ${results.totalProcessed || 0}
-      - New vehicles added: ${results.added || 0}
-      - Existing vehicles updated: ${results.updated || 0}
-      ${results.errors && results.errors.length > 0 ? 
-        `- Errors encountered: ${results.errors.length}` : 
-        ''
-      }
-      
-      If you have any questions or concerns about this inventory update, please contact your Rylie AI representative.
-    `;
-    
-    return await sendEmail(process.env.SENDGRID_API_KEY || '', {
-      to,
-      from,
-      subject,
-      text,
-      html
-    });
-  } catch (error) {
-    console.error('Error sending inventory update email:', error);
-    return false;
-  }
-}
-
-/**
- * Send a conversation summary email
- * 
- * @param to Recipient email address
- * @param subject Email subject
- * @param conversation Conversation data to include in summary
- * @returns Success status
- */
-export async function sendConversationSummary(
-  to: string,
-  subject: string,
-  conversation: any
-): Promise<boolean> {
-  try {
-    const from = 'reports@rylie-ai.com';
-    
-    // Extract conversation details
-    const customerName = conversation.customerName || 'Customer';
-    const status = conversation.status || 'active';
-    const startedAt = conversation.createdAt ? new Date(conversation.createdAt).toLocaleString() : 'Unknown';
-    const lastUpdated = conversation.updatedAt ? new Date(conversation.updatedAt).toLocaleString() : 'Unknown';
-    
-    // Format messages for HTML
-    const messagesHtml = conversation.messages && Array.isArray(conversation.messages) 
-      ? conversation.messages.map((msg: any) => `
-          <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
-            <div style="font-weight: bold;">${msg.role === 'customer' ? customerName : 'Rylie AI'}</div>
-            <div>${msg.content}</div>
-            <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
-              ${msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ''}
-            </div>
-          </div>
-        `).join('') 
-      : '<p>No messages in this conversation</p>';
-    
-    const html = `
-      <h2>Conversation Summary</h2>
-      <p>Here is a summary of the conversation with ${customerName}.</p>
-      
-      <h3>Conversation Details:</h3>
-      <ul>
-        <li><strong>Status:</strong> ${status}</li>
-        <li><strong>Started:</strong> ${startedAt}</li>
-        <li><strong>Last Updated:</strong> ${lastUpdated}</li>
-      </ul>
-      
-      <h3>Messages:</h3>
-      <div style="margin-top: 15px;">
-        ${messagesHtml}
-      </div>
-      
-      <p style="margin-top: 20px;">
-        To respond to this conversation, please log in to your Rylie AI dashboard.
-      </p>
-    `;
-    
-    // Generate a plain text version for email clients that don't support HTML
-    let messagesText = 'No messages in this conversation';
-    if (conversation.messages && Array.isArray(conversation.messages)) {
-      messagesText = conversation.messages.map((msg: any) => {
-        const sender = msg.role === 'customer' ? customerName : 'Rylie AI';
-        const timestamp = msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '';
-        return `${sender}: ${msg.content}\n${timestamp ? `Sent: ${timestamp}` : ''}`;
-      }).join('\n\n');
-    }
-    
-    const text = `
-      Conversation Summary
-      
-      Here is a summary of the conversation with ${customerName}.
-      
-      Conversation Details:
-      - Status: ${status}
-      - Started: ${startedAt}
-      - Last Updated: ${lastUpdated}
-      
-      Messages:
-      ${messagesText}
-      
-      To respond to this conversation, please log in to your Rylie AI dashboard.
-    `;
-    
-    return await sendEmail(process.env.SENDGRID_API_KEY || '', {
-      to,
-      from,
-      subject,
-      text,
-      html
-    });
-  } catch (error) {
-    console.error('Error sending conversation summary email:', error);
-    return false;
-  }
-}
-
-/**
- * Send a lead handover email
- * 
- * @param to Recipient email address
- * @param subject Email subject
- * @param handoverData Lead handover data
- * @returns Success status
- */
-export async function sendHandoverEmail(
-  to: string,
-  subject: string,
-  dossier: any
-): Promise<boolean> {
-  try {
-    const from = 'leads@rylie-ai.com';
-    
-    // Extract handover details
-    const customerName = dossier.customerName || 'Customer';
-    const customerContact = dossier.customerContact || 'Not provided';
-    const escalationReason = dossier.escalationReason || 'Manual handover';
-    const urgency = dossier.urgency?.toUpperCase() || 'MEDIUM';
-    const handoverDate = new Date().toLocaleString();
-    
-    // Format action items based on suggested approach
-    const suggestedApproach = dossier.suggestedApproach || 'Follow up with the customer to address their needs.';
-    const actionItems = suggestedApproach.split('\n').filter((item: string) => item.trim().length > 0);
-    const actionItemsHtml = actionItems.length > 0
-      ? actionItems.map((item: string) => `<li>${item}</li>`).join('') 
-      : '<li>Follow up with the customer to address their needs.</li>';
-    
-    // Format customer insights
-    const customerPointsHtml = dossier.customerInsights && Array.isArray(dossier.customerInsights) 
-      ? dossier.customerInsights.map((insight: any) => `<li>${insight.key}: ${insight.value}</li>`).join('') 
-      : '';
-    
-    // Format vehicle interests
-    const vehiclePointsHtml = dossier.vehicleInterests && Array.isArray(dossier.vehicleInterests) 
-      ? dossier.vehicleInterests.map((vehicle: any) => {
-          const details = [];
-          if (vehicle.year) details.push(`${vehicle.year}`);
-          if (vehicle.make) details.push(`${vehicle.make}`);
-          if (vehicle.model) details.push(`${vehicle.model}`);
-          if (vehicle.trim) details.push(`${vehicle.trim}`);
-          
-          return `<li>${details.join(' ')} (Confidence: ${vehicle.confidence * 100}%)</li>`;
-        }).join('') 
-      : '';
-    
-    // Format next steps from suggested approach if not already provided
-    let nextSteps = [];
-    if (dossier.nextSteps && Array.isArray(dossier.nextSteps)) {
-      nextSteps = dossier.nextSteps;
     } else {
-      // Create next steps from the suggested approach
-      nextSteps = [
-        'Contact customer within 24 hours',
-        'Reference their specific interests mentioned in the conversation',
-        'Address any unanswered questions from the conversation history'
-      ];
+      // Log the email details when SendGrid is unavailable
+      logger.info('Email would be sent (SendGrid not configured)', {
+        to,
+        from,
+        subject,
+        text: text.substring(0, 100) + (text.length > 100 ? '...' : '')
+      });
+      
+      // In development, log the full email content to console
+      if (process.env.NODE_ENV !== 'production') {
+        logger.debug('Email content', { to, from, subject, text, html });
+      }
+      
+      return true;
     }
-    
-    const nextStepsHtml = nextSteps.map((item: string) => `<li>${item}</li>`).join('');
-    
-    // Format conversation history for HTML
-    const messagesHtml = dossier.fullConversationHistory && Array.isArray(dossier.fullConversationHistory) 
-      ? dossier.fullConversationHistory.map((msg: any) => `
-          <div style="margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: ${msg.role === 'customer' ? '#f0f0f0' : '#e6f7ff'};">
-            <div style="font-weight: bold;">${msg.role === 'customer' ? customerName : 'Rylie AI'}</div>
-            <div>${msg.content}</div>
-            <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
-              ${msg.timestamp ? new Date(msg.timestamp).toLocaleString() : ''}
-            </div>
-          </div>
-        `).join('') 
-      : '<p>No messages in this conversation</p>';
-    
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: #0056b3; color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0;">LEAD HANDOVER DOSSIER</h1>
-          <p style="margin: 5px 0 0 0; font-size: 18px;">${urgency} PRIORITY</p>
-        </div>
-        
-        <div style="padding: 20px; border: 1px solid #ddd; border-top: none;">
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">Customer Information</h2>
-            <p><strong>Name:</strong> ${customerName}</p>
-            <p><strong>Contact:</strong> ${customerContact}</p>
-            <p><strong>Handover Date:</strong> ${handoverDate}</p>
-            <p><strong>Reason:</strong> ${escalationReason}</p>
-          </div>
-          
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">SUMMARY</h2>
-            <p>${dossier.conversationSummary}</p>
-          </div>
-          
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">ACTION ITEMS</h2>
-            <ul style="padding-left: 20px;">
-              ${actionItemsHtml}
-            </ul>
-          </div>
-          
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">CUSTOMER INSIGHTS</h2>
-            <ul style="padding-left: 20px;">
-              ${customerPointsHtml}
-            </ul>
-          </div>
-          
-          ${vehiclePointsHtml ? `
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">VEHICLE INTERESTS</h2>
-            <ul style="padding-left: 20px;">
-              ${vehiclePointsHtml}
-            </ul>
-          </div>
-          ` : ''}
-          
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">NEXT STEPS</h2>
-            <ul style="padding-left: 20px;">
-              ${nextStepsHtml}
-            </ul>
-          </div>
-          
-          <div style="margin-bottom: 20px;">
-            <h2 style="color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 5px;">CONVERSATION HISTORY</h2>
-            <div style="margin-top: 15px;">
-              ${messagesHtml}
-            </div>
-          </div>
-          
-          <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; text-align: center;">
-            <p>This handover was automatically generated by Rylie AI. For questions, contact support.</p>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // Generate a plain text version for email clients that don't support HTML
-    // Create a simpler text-based format of the same information
-    let messagesText = 'No conversation history available';
-    if (dossier.fullConversationHistory && Array.isArray(dossier.fullConversationHistory)) {
-      messagesText = dossier.fullConversationHistory.map((msg: any) => {
-        const sender = msg.role === 'customer' ? customerName : 'Rylie AI';
-        const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
-        return `${sender}: ${msg.content}\n${timestamp ? `Sent: ${timestamp}` : ''}`;
-      }).join('\n\n');
-    }
-    
-    // Format customer insights in text
-    let customerInsightsText = 'No customer insights available';
-    if (dossier.customerInsights && Array.isArray(dossier.customerInsights)) {
-      customerInsightsText = dossier.customerInsights.map((insight: any) => {
-        return `- ${insight.key}: ${insight.value}`;
-      }).join('\n');
-    }
-    
-    // Format vehicle interests in text
-    let vehicleInterestsText = '';
-    if (dossier.vehicleInterests && Array.isArray(dossier.vehicleInterests)) {
-      vehicleInterestsText = dossier.vehicleInterests.map((vehicle: any) => {
-        const details = [];
-        if (vehicle.year) details.push(`${vehicle.year}`);
-        if (vehicle.make) details.push(`${vehicle.make}`);
-        if (vehicle.model) details.push(`${vehicle.model}`);
-        if (vehicle.trim) details.push(`${vehicle.trim}`);
-        
-        return `- ${details.join(' ')} (Confidence: ${vehicle.confidence * 100}%)`;
-      }).join('\n');
-    }
-    
-    const text = `
-LEAD HANDOVER DOSSIER - ${urgency} PRIORITY
-
-CUSTOMER INFORMATION:
-Name: ${customerName}
-Contact: ${customerContact}
-Handover Date: ${handoverDate}
-Reason: ${escalationReason}
-
-SUMMARY:
-${dossier.conversationSummary}
-
-ACTION ITEMS:
-${actionItems.map(item => `- ${item}`).join('\n')}
-
-CUSTOMER INSIGHTS:
-${customerInsightsText}
-
-${vehicleInterestsText ? `VEHICLE INTERESTS:\n${vehicleInterestsText}\n\n` : ''}
-
-NEXT STEPS:
-${nextSteps.map(item => `- ${item}`).join('\n')}
-
-CONVERSATION HISTORY:
-${messagesText}
-
-This handover was automatically generated by Rylie AI. For questions, contact support.
-    `;
-    
-    return await sendEmail(process.env.SENDGRID_API_KEY || '', {
-      to,
-      from,
-      subject,
-      text,
-      html
-    });
   } catch (error) {
-    console.error('Error sending lead handover email:', error);
+    logger.error('Failed to send email', error, { to, subject });
     return false;
   }
-}
+};
+
+/**
+ * Send a notification email
+ * @param to Recipient email address
+ * @param subject Email subject
+ * @param message Email message
+ */
+export const sendNotificationEmail = async (
+  to: string,
+  subject: string,
+  message: string
+): Promise<boolean> => {
+  const text = `${message}
+
+This is an automated notification from Rylie AI.`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #f8f8f8; padding: 20px; border-radius: 5px;">
+        <p>${message}</p>
+      </div>
+      <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Rylie AI.</p>
+    </div>
+  `;
+
+  return await sendEmail(to, subject, text, html);
+};
+
+/**
+ * Send a password reset email
+ * @param to User email address
+ * @param resetToken Reset token
+ */
+export const sendPasswordResetEmail = async (
+  to: string,
+  resetToken: string
+): Promise<boolean> => {
+  const resetUrl = `${process.env.APP_URL || 'https://app.rylie.ai'}/reset-password?token=${resetToken}`;
+  
+  const subject = 'Password Reset Request';
+  
+  const text = `You requested a password reset for your Rylie AI account.
+
+Please click the link below to reset your password:
+${resetUrl}
+
+This link will expire in 1 hour.
+
+If you didn't request this, please ignore this email.`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Password Reset Request</h2>
+      <p>You requested a password reset for your Rylie AI account.</p>
+      <div style="margin: 30px 0;">
+        <a href="${resetUrl}" style="background-color: #4a6cf7; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a>
+      </div>
+      <p>This link will expire in 1 hour.</p>
+      <p>If you didn't request this, please ignore this email.</p>
+    </div>
+  `;
+
+  return await sendEmail(to, subject, text, html);
+};
+
+/**
+ * Send a welcome email to a new user
+ * @param to User email address
+ * @param name User name
+ */
+export const sendWelcomeEmail = async (
+  to: string,
+  name: string
+): Promise<boolean> => {
+  const subject = 'Welcome to Rylie AI';
+  
+  const text = `Hi ${name},
+
+Welcome to Rylie AI! We're excited to have you onboard.
+
+You can now log in to your account and start setting up your dealership's AI assistant.
+
+For help getting started, check out our documentation:
+https://docs.rylie.ai/getting-started
+
+Best regards,
+The Rylie AI Team`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Welcome to Rylie AI!</h2>
+      <p>Hi ${name},</p>
+      <p>We're excited to have you onboard. You can now log in to your account and start setting up your dealership's AI assistant.</p>
+      <div style="margin: 30px 0;">
+        <a href="${process.env.APP_URL || 'https://app.rylie.ai'}" style="background-color: #4a6cf7; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">Get Started</a>
+      </div>
+      <p>For help getting started, check out our <a href="https://docs.rylie.ai/getting-started">documentation</a>.</p>
+      <p>Best regards,<br>The Rylie AI Team</p>
+    </div>
+  `;
+
+  return await sendEmail(to, subject, text, html);
+};
+
+/**
+ * Send a report email
+ * @param to Recipient email address
+ * @param reportId Report ID
+ * @param reportType Report type
+ */
+export const sendReportEmail = async (
+  to: string,
+  reportId: string,
+  reportType: string
+): Promise<boolean> => {
+  const reportUrl = `${process.env.APP_URL || 'https://app.rylie.ai'}/reports/${reportId}`;
+  
+  const subject = `${reportType} Report Ready`;
+  
+  const text = `Your ${reportType} report is now ready.
+
+You can view the report here:
+${reportUrl}
+
+This is an automated notification from Rylie AI.`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>${reportType} Report Ready</h2>
+      <p>Your report is now ready to view.</p>
+      <div style="margin: 30px 0;">
+        <a href="${reportUrl}" style="background-color: #4a6cf7; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">View Report</a>
+      </div>
+      <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Rylie AI.</p>
+    </div>
+  `;
+
+  return await sendEmail(to, subject, text, html);
+};
+
+/**
+ * Send a lead handover email with dossier information
+ * @param to Recipient email address
+ * @param handoverData Handover dossier data
+ * @param additionalRecipients Optional additional recipients
+ */
+export const sendHandoverEmail = async (
+  to: string,
+  handoverData: any,
+  additionalRecipients?: string[]
+): Promise<boolean> => {
+  const subject = `Lead Handover: ${handoverData.customerName || 'New Lead'}`;
+  
+  // Format insights into readable text
+  const insightsText = handoverData.customerInsights?.map((insight: {key: string, value: string, confidence: number}) => {
+    return `${insight.key}: ${insight.value} (Confidence: ${Math.round(insight.confidence * 100)}%)`;
+  }).join('\n') || 'No insights available';
+  
+  // Format vehicle interests into readable text
+  const vehicleText = handoverData.vehicleInterests?.map((vehicle: any) => {
+    const details = [];
+    if (vehicle.year) details.push(`${vehicle.year}`);
+    if (vehicle.make) details.push(`${vehicle.make}`);
+    if (vehicle.model) details.push(`${vehicle.model}`);
+    if (vehicle.trim) details.push(`${vehicle.trim}`);
+    if (vehicle.vin) details.push(`VIN: ${vehicle.vin}`);
+    return details.join(' ') + ` (Confidence: ${Math.round(vehicle.confidence * 100)}%)`;
+  }).join('\n') || 'No vehicle interests identified';
+  
+  // Format conversation history into readable text
+  const conversationText = handoverData.fullConversationHistory?.map((msg: {role: string, content: string, timestamp: string}) => {
+    const timestampStr = new Date(msg.timestamp).toLocaleString();
+    return `[${timestampStr}] ${msg.role === 'customer' ? 'Customer' : 'Rylie'}: ${msg.content}`;
+  }).join('\n\n') || 'No conversation history available';
+  
+  const text = `Lead Handover Dossier: ${handoverData.customerName || 'New Lead'}
+
+Customer Information:
+Name: ${handoverData.customerName || 'Unknown'}
+Contact: ${handoverData.customerContact || 'Unknown'}
+Dealership ID: ${handoverData.dealershipId || 'Unknown'}
+Conversation ID: ${handoverData.conversationId || 'Unknown'}
+
+Escalation Reason:
+${handoverData.escalationReason || 'No reason provided'}
+
+Conversation Summary:
+${handoverData.conversationSummary || 'No summary available'}
+
+Customer Insights:
+${insightsText}
+
+Vehicle Interests:
+${vehicleText}
+
+Suggested Approach:
+${handoverData.suggestedApproach || 'No suggested approach available'}
+
+Urgency: ${handoverData.urgency?.toUpperCase() || 'MEDIUM'}
+
+Full Conversation History:
+${conversationText}
+
+This handover dossier was automatically generated by Rylie AI.`;
+
+  // Create HTML version with improved formatting
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+      <h2>Lead Handover Dossier: ${handoverData.customerName || 'New Lead'}</h2>
+      
+      <div style="background-color: #f4f6fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Customer Information</h3>
+        <p><strong>Name:</strong> ${handoverData.customerName || 'Unknown'}</p>
+        <p><strong>Contact:</strong> ${handoverData.customerContact || 'Unknown'}</p>
+        <p><strong>Dealership ID:</strong> ${handoverData.dealershipId || 'Unknown'}</p>
+        <p><strong>Conversation ID:</strong> ${handoverData.conversationId || 'Unknown'}</p>
+      </div>
+      
+      <div style="background-color: #ffeeee; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0; color: #cc0000;">Escalation Reason</h3>
+        <p>${handoverData.escalationReason || 'No reason provided'}</p>
+      </div>
+      
+      <div style="background-color: #f4f6fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Conversation Summary</h3>
+        <p>${handoverData.conversationSummary || 'No summary available'}</p>
+      </div>
+      
+      <div style="background-color: #f4f6fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Customer Insights</h3>
+        <ul>
+          ${handoverData.customerInsights?.map((insight: {key: string, value: string, confidence: number}) => {
+            return `<li><strong>${insight.key}:</strong> ${insight.value} <span style="color: #666;">(Confidence: ${Math.round(insight.confidence * 100)}%)</span></li>`;
+          }).join('') || '<li>No insights available</li>'}
+        </ul>
+      </div>
+      
+      <div style="background-color: #f4f6fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Vehicle Interests</h3>
+        <ul>
+          ${handoverData.vehicleInterests?.map((vehicle: any) => {
+            const details = [];
+            if (vehicle.year) details.push(`${vehicle.year}`);
+            if (vehicle.make) details.push(`${vehicle.make}`);
+            if (vehicle.model) details.push(`${vehicle.model}`);
+            if (vehicle.trim) details.push(`${vehicle.trim}`);
+            return `<li>${details.join(' ')} ${vehicle.vin ? `<br><span style="font-size: 0.9em;">VIN: ${vehicle.vin}</span>` : ''} <span style="color: #666;">(Confidence: ${Math.round(vehicle.confidence * 100)}%)</span></li>`;
+          }).join('') || '<li>No vehicle interests identified</li>'}
+        </ul>
+      </div>
+      
+      <div style="background-color: #f4f6fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Suggested Approach</h3>
+        <p>${handoverData.suggestedApproach || 'No suggested approach available'}</p>
+      </div>
+      
+      <div style="background-color: ${
+        handoverData.urgency === 'high' ? '#ffeeee' : 
+        handoverData.urgency === 'medium' ? '#fff8ee' : 
+        '#eeffee'
+      }; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Urgency: <span style="color: ${
+          handoverData.urgency === 'high' ? '#cc0000' : 
+          handoverData.urgency === 'medium' ? '#cc7700' : 
+          '#007700'
+        };">${handoverData.urgency?.toUpperCase() || 'MEDIUM'}</span></h3>
+      </div>
+      
+      <div style="background-color: #f4f6fa; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">Full Conversation History</h3>
+        ${handoverData.fullConversationHistory?.map((msg: {role: string, content: string, timestamp: string}) => {
+          const timestampStr = new Date(msg.timestamp).toLocaleString();
+          return `
+            <div style="margin-bottom: 15px; ${msg.role === 'customer' ? '' : 'background-color: #e6f0ff; padding: 10px; border-radius: 5px;'}">
+              <p style="margin-bottom: 5px; font-size: 0.8em; color: #666;">${timestampStr} - ${msg.role === 'customer' ? 'Customer' : 'Rylie'}</p>
+              <p style="margin-top: 0;">${msg.content}</p>
+            </div>
+          `;
+        }).join('') || '<p>No conversation history available</p>'}
+      </div>
+      
+      <p style="color: #666; font-size: 12px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px;">This handover dossier was automatically generated by Rylie AI.</p>
+    </div>
+  `;
+
+  // Set up recipients
+  let recipients = to;
+  if (additionalRecipients && additionalRecipients.length > 0) {
+    recipients = [to, ...additionalRecipients];
+  }
+
+  return await sendEmail(recipients, subject, text, html);
+};
+
+// Export for testing purposes
+export const _internal = {
+  mailService
+};
+
+export default {
+  sendEmail,
+  sendNotificationEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendReportEmail,
+  sendHandoverEmail,
+  queueEmail
+};

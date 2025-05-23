@@ -94,6 +94,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize queue consumers with in-memory fallback
+  try {
+    const { initializeQueueConsumers } = await import('./services/queue-consumers');
+    await initializeQueueConsumers();
+    logger.info('Queue consumers successfully initialized');
+  } catch (error) {
+    logger.warn('Failed to initialize queue consumers, will use in-memory fallback', error);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
