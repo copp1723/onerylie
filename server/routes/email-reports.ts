@@ -8,7 +8,7 @@ import {
   getScheduledReports,
   type EmailScheduleSettings 
 } from '../services/scheduler';
-import { sendConversationSummary } from '../services/email';
+import { sendConversationSummary } from '../services/conversation-summary';
 
 const router = Router();
 

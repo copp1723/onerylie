@@ -180,10 +180,138 @@ if (typeof process !== 'undefined') {
   });
 }
 
+// Email schedule settings interface
+export interface EmailScheduleSettings {
+  id: string;
+  dealershipId: number;
+  recipientEmails: string[];
+  frequency: 'daily' | 'weekly';
+  dayOfWeek?: number;
+  timeOfDay: string;
+  reportType: string;
+  lastRun?: Date;
+  nextRun?: Date;
+  enabled: boolean;
+}
+
+// Store for email schedules
+const emailSchedules = new Map<string, EmailScheduleSettings>();
+
+/**
+ * Schedule an email report
+ * @param settings Email schedule settings
+ * @returns Schedule ID
+ */
+export const scheduleEmailReport = (settings: Omit<EmailScheduleSettings, 'id'>): string => {
+  const id = `email_${settings.reportType}_${settings.dealershipId}_${Date.now()}`;
+  
+  // Calculate next run time
+  const nextRun = calculateNextRunTime(settings.frequency, settings.dayOfWeek, settings.timeOfDay);
+  
+  // Store schedule
+  emailSchedules.set(id, {
+    ...settings,
+    id,
+    nextRun,
+    enabled: true
+  });
+  
+  // Calculate delay until next run
+  const delay = nextRun.getTime() - Date.now();
+  
+  // Schedule one-time report
+  if (delay > 0) {
+    scheduleOneTimeReport(settings.dealershipId, settings.reportType, delay);
+  }
+  
+  logger.info(`Scheduled email report: ${settings.reportType} for dealership ${settings.dealershipId}`, {
+    id,
+    nextRun: nextRun.toISOString()
+  });
+  
+  return id;
+};
+
+/**
+ * Remove a scheduled report
+ * @param id Schedule ID
+ * @returns Whether the schedule was removed
+ */
+export const removeScheduledReport = (id: string): boolean => {
+  const removed = emailSchedules.delete(id);
+  
+  if (removed) {
+    // Also cancel any pending job
+    cancelScheduledReport(id);
+    logger.info(`Removed scheduled report: ${id}`);
+  } else {
+    logger.warn(`Attempted to remove non-existent schedule: ${id}`);
+  }
+  
+  return removed;
+};
+
+/**
+ * Get all scheduled reports
+ * @param dealershipId Optional dealership ID filter
+ * @returns Array of scheduled reports
+ */
+export const getScheduledReports = (dealershipId?: number): EmailScheduleSettings[] => {
+  const schedules = Array.from(emailSchedules.values());
+  
+  if (dealershipId !== undefined) {
+    return schedules.filter(schedule => schedule.dealershipId === dealershipId);
+  }
+  
+  return schedules;
+};
+
+/**
+ * Calculate the next run time for a schedule
+ * @param frequency Schedule frequency
+ * @param dayOfWeek Day of week (0-6, 0 is Sunday)
+ * @param timeOfDay Time of day (HH:MM)
+ * @returns Next run date
+ */
+const calculateNextRunTime = (
+  frequency: 'daily' | 'weekly', 
+  dayOfWeek?: number, 
+  timeOfDay: string = '00:00'
+): Date => {
+  const [hours, minutes] = timeOfDay.split(':').map(Number);
+  const now = new Date();
+  const nextRun = new Date();
+  
+  // Set time
+  nextRun.setHours(hours, minutes, 0, 0);
+  
+  // If the time is in the past, add a day
+  if (nextRun <= now) {
+    nextRun.setDate(nextRun.getDate() + 1);
+  }
+  
+  // For weekly schedules, adjust to the specified day
+  if (frequency === 'weekly' && dayOfWeek !== undefined) {
+    const currentDay = nextRun.getDay();
+    let daysToAdd = dayOfWeek - currentDay;
+    
+    if (daysToAdd <= 0) {
+      daysToAdd += 7;
+    }
+    
+    nextRun.setDate(nextRun.getDate() + daysToAdd);
+  }
+  
+  return nextRun;
+};
+
 export default {
   scheduleRecurringReport,
   cancelScheduledReport,
   scheduleOneTimeReport,
   initializeReportSchedules,
-  shutdownScheduler
+  shutdownScheduler,
+  scheduleEmailReport,
+  removeScheduledReport,
+  getScheduledReports
 };

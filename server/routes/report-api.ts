@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { apiKeyAuth, type AuthenticatedRequest } from '../middleware/auth';
-import { processScheduledReports } from '../services/scheduler';
+import { initializeReportSchedules } from '../services/scheduler';
 import { log } from '../vite';
 
 const router = Router();
@@ -16,8 +16,8 @@ router.post('/trigger', apiKeyAuth, async (req: AuthenticatedRequest, res: Respo
       });
     }
     
-    // Process all scheduled reports
-    await processScheduledReports();
+    // Re-initialize report schedules
+    await initializeReportSchedules();
     
     log(`Reports triggered by dealership ${req.dealershipId}`, 'scheduler');
     

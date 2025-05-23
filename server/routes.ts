@@ -6,10 +6,11 @@ import { db } from "./db";
 import { z } from "zod";
 import { apiKeyAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { generateResponse, detectEscalationKeywords, analyzeMessageForVehicleIntent, type ConversationContext, type PersonaArguments, type HandoverDossier } from "./services/openai";
-import { sendHandoverEmail, sendConversationSummary } from "./services/email";
+import { sendHandoverEmail } from "./services/email";
+import { sendConversationSummary } from "./services/conversation-summary";
 import { generateABTestedResponse } from "./services/abtest-openai-integration";
-import { processScheduledReports } from "./services/scheduler";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { initializeReportSchedules } from "./services/scheduler";
 import { users } from "@shared/schema";
 import emailReportRoutes from "./routes/email-reports";
 import reportApiRoutes from "./routes/report-api";
@@ -134,17 +135,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register PureCars routes
   app.use('/api/purecars', purecarsRoutes);
 
-  // Set up scheduled task to process email reports
-  // In a production environment, this would be handled by a proper scheduler
-  // For this demo, we'll check every minute if any reports are due
-  setInterval(async () => {
-    try {
-      await processScheduledReports();
-      log('Processed scheduled reports', 'scheduler');
-    } catch (error) {
-      console.error('Error processing scheduled reports:', error);
-    }
-  }, 60 * 1000); // Check every minute
+  // Initialize report schedules
+  try {
+    await initializeReportSchedules();
+    log('Successfully initialized report schedules', 'scheduler');
+  } catch (error) {
+    console.error('Error initializing report schedules:', error);
+  }
 
   // Authentication routes
   app.post('/api/auth/login', async (req, res) => {
