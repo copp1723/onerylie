@@ -457,13 +457,24 @@ export async function sendHandoverDossierEmail(dossier: HandoverDossier): Promis
     
     if (success) {
       // Update the dossier to mark email as sent
-      await db.update(handoverDossiers)
-        .set({ 
-          isEmailSent: true,
-          emailSentAt: new Date(),
-          updatedAt: new Date()
-        })
-        .where(eq(handoverDossiers.id, dossier.id));
+      try {
+        await db.update(handoverDossiers)
+          .set({ 
+            isEmailSent: true,
+            emailSentAt: new Date(),
+            updatedAt: new Date()
+          })
+          .where(eq(handoverDossiers.id, dossier.id));
+      } catch (error) {
+        // Handle the case where emailSentAt column doesn't exist
+        console.warn('Error updating handover dossier with emailSentAt, trying without it:', error);
+        await db.update(handoverDossiers)
+          .set({ 
+            isEmailSent: true,
+            updatedAt: new Date()
+          })
+          .where(eq(handoverDossiers.id, dossier.id));
+      }
       
       return true;
     }
