@@ -12,7 +12,6 @@ export const dealerships = pgTable("dealerships", {
   contactPhone: text("contact_phone").notNull(),
   domain: text("domain"),
   handoverEmail: text("handover_email"),
-  active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
